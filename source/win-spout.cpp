@@ -53,13 +53,6 @@ bool obs_module_load(void)
 	obs_register_source(&spout_source_info);
 
 	// load spout output
-	QMainWindow *main_window = (QMainWindow *)obs_frontend_get_main_window();
-
-	if (!main_window) {
-		blog(LOG_ERROR, "Can't get main window!");
-		return false;
-	}
-
 	win_spout_config *config = win_spout_config::get();
 	config->load();
 
@@ -73,11 +66,22 @@ bool obs_module_load(void)
 	QAction *menu_action = (QAction *)obs_frontend_add_tools_menu_qaction(obs_module_text("toolslabel"));
 
 	obs_frontend_push_ui_translation(obs_module_get_string);
-	spout_output_settings = new win_spout_output_settings(main_window);
 	obs_frontend_pop_ui_translation();
 
 	auto menu_cb = [] {
-		spout_output_settings->toggle_show_hide();
+		if (!spout_output_settings) {
+			QMainWindow *main_window = (QMainWindow *)obs_frontend_get_main_window();
+			if (!main_window) {
+				blog(LOG_ERROR, "Can't get main window!");
+				return;
+			}
+			spout_output_settings = new win_spout_output_settings(main_window);
+			spout_output_settings->show();
+		} else {
+			spout_output_settings->show();
+			spout_output_settings->raise();
+			spout_output_settings->activateWindow();
+		}
 	};
 	menu_action->connect(menu_action, &QAction::triggered, menu_cb);
 
@@ -94,6 +98,9 @@ bool obs_module_load(void)
 
 void obs_module_unload()
 {
+	if (spout_output_settings) {
+		delete spout_output_settings;
+	}
 	blog(LOG_INFO, "win-spout unloaded!");
 }
 
