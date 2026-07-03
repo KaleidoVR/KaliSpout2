@@ -19,15 +19,15 @@
             }
         },
         "qt6": {
-            "version": "2026-06-02",
+            "version": "2025-07-11",
             "baseUrl": "https://github.com/obsproject/obs-deps/releases/download",
             "label": "Pre-Built Qt6",
             "hashes": {
-                "macos": "",
-                "windows-x64": "99f2a99e9d86d7737103f3b89934ed6b50dceb10e555801ab6394bd7f8168086"
+                "macos": "d3f5f04b6ea486e032530bdf0187cbda9a54e0a49621a4c8ba984c5023998867",
+                "windows-x64": "0e76bf0555dd5382838850b748d3dcfab44a1e1058441309ab54e1a65b156d0a"
             },
             "debugSymbols": {
-                "windows-x64": "de27f32a0a08835da07f98014ca20664182322a5a7e36badce2095b2f1d30111"
+                "windows-x64": "11b7be92cf66a273299b8f3515c07a5cfb61614b59a4e67f7fc5ecba5e2bdf21"
             }
         }
     },
