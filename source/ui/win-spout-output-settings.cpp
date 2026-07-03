@@ -14,10 +14,13 @@
 #include "../win-spout-config.h"
 #include "../win-spout.h"
 
+extern win_spout_output_settings *spout_output_settings;
+
 win_spout_output_settings::win_spout_output_settings(QWidget *parent)
 	: QDialog(parent),
 	  ui(new Ui::win_spout_output_settings)
 {
+	this->setAttribute(Qt::WA_DeleteOnClose);
 	ui->setupUi(this);
 	connect(ui->pushButton_start, SIGNAL(clicked(bool)), this, SLOT(on_start()));
 	connect(ui->pushButton_stop, SIGNAL(clicked(bool)), this, SLOT(on_stop()));
@@ -43,21 +46,10 @@ void win_spout_output_settings::save_settings()
 win_spout_output_settings::~win_spout_output_settings()
 {
 	save_settings();
+	if (spout_output_settings == this) {
+		spout_output_settings = nullptr;
+	}
 	delete ui;
-}
-
-void win_spout_output_settings::close_event(QCloseEvent *event)
-{
-	UNUSED_PARAMETER(event);
-	save_settings();
-}
-
-void win_spout_output_settings::toggle_show_hide()
-{
-	if (!isVisible())
-		setVisible(true);
-	else
-		setVisible(false);
 }
 
 void win_spout_output_settings::on_start()
