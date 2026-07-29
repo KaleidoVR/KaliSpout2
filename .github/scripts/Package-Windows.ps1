@@ -48,24 +48,62 @@ function Package {
     $ProductVersion = $BuildSpec.version
 
     $OutputName = "${ProductName}-${ProductVersion}-windows-${Target}"
+    $PortableOutputName = "${ProductName}-${ProductVersion}-windows-${Target}-portable"
+    $InstallRoot = "${ProjectRoot}/release/${Configuration}/${ProductName}"
+    $PortableRoot = "${ProjectRoot}/release/${PortableOutputName}"
 
     $RemoveArgs = @{
         ErrorAction = 'SilentlyContinue'
         Path = @(
-            "${ProjectRoot}/release/${ProductName}-*-windows-*.zip"
+            "${ProjectRoot}/release/${ProductName}-*-windows-*.zip",
+            $PortableRoot
         )
     }
 
     Remove-Item @RemoveArgs
 
+    # The cmake install tree only contains win-spout.dll. The Spout runtime DLLs it
+    # depends on are placed elsewhere by a POST_BUILD step, so stage them into the
+    # plugin bin directory here to make both the standard and portable archives
+    # self-contained (mirrors the DLLs bundled by the NSIS installer).
+    $SpoutBinariesDir = "${ProjectRoot}/deps/Spout2/BUILD/Binaries/x64"
+    $SpoutRuntimeDlls = @('Spout.dll', 'SpoutDX.dll', 'SpoutLibrary.dll')
+    foreach ( $Dll in $SpoutRuntimeDlls ) {
+        Copy-Item -Path "${SpoutBinariesDir}/${Dll}" -Destination "${InstallRoot}/bin/64bit/${Dll}" -Force
+    }
+
     Log-Group "Archiving ${ProductName}..."
     $CompressArgs = @{
-        Path = (Get-ChildItem -Path "${ProjectRoot}/release/${Configuration}" -Exclude "${OutputName}*.*")
+        Path = (Get-ChildItem -Path "${ProjectRoot}/release/${Configuration}" -Exclude "${OutputName}*.*", "${PortableOutputName}*.*")
         CompressionLevel = 'Optimal'
         DestinationPath = "${ProjectRoot}/release/${OutputName}.zip"
         Verbose = ($Env:CI -ne $null)
     }
     Compress-Archive -Force @CompressArgs
+
+    # Traditional portable layout: re-arrange <plugin>/bin/64bit and <plugin>/data into
+    # obs-plugins/64bit and data/obs-plugins/<plugin> so the archive can be extracted
+    # straight onto an OBS install.
+    Log-Group "Archiving ${ProductName} portable layout..."
+    $PortableBinPath = "${PortableRoot}/obs-plugins/64bit"
+    $PortableDataPath = "${PortableRoot}/data/obs-plugins/${ProductName}"
+
+    New-Item -Path $PortableBinPath -ItemType Directory -Force | Out-Null
+    New-Item -Path $PortableDataPath -ItemType Directory -Force | Out-Null
+
+    Copy-Item -Path "${InstallRoot}/bin/64bit/*" -Destination $PortableBinPath -Recurse -Force
+    if ( Test-Path "${InstallRoot}/data" ) {
+        Copy-Item -Path "${InstallRoot}/data/*" -Destination $PortableDataPath -Recurse -Force
+    }
+
+    $PortableCompressArgs = @{
+        Path = (Get-ChildItem -Path $PortableRoot)
+        CompressionLevel = 'Optimal'
+        DestinationPath = "${ProjectRoot}/release/${PortableOutputName}.zip"
+        Verbose = ($Env:CI -ne $null)
+    }
+    Compress-Archive -Force @PortableCompressArgs
+    Remove-Item -Path $PortableRoot -Recurse -Force
     Log-Group
 }
 
