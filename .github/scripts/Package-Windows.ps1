@@ -62,6 +62,16 @@ function Package {
 
     Remove-Item @RemoveArgs
 
+    # The cmake install tree only contains win-spout.dll. The Spout runtime DLLs it
+    # depends on are placed elsewhere by a POST_BUILD step, so stage them into the
+    # plugin bin directory here to make both the standard and portable archives
+    # self-contained (mirrors the DLLs bundled by the NSIS installer).
+    $SpoutBinariesDir = "${ProjectRoot}/deps/Spout2/BUILD/Binaries/x64"
+    $SpoutRuntimeDlls = @('Spout.dll', 'SpoutDX.dll', 'SpoutLibrary.dll')
+    foreach ( $Dll in $SpoutRuntimeDlls ) {
+        Copy-Item -Path "${SpoutBinariesDir}/${Dll}" -Destination "${InstallRoot}/bin/64bit/${Dll}" -Force
+    }
+
     Log-Group "Archiving ${ProductName}..."
     $CompressArgs = @{
         Path = (Get-ChildItem -Path "${ProjectRoot}/release/${Configuration}" -Exclude "${OutputName}*.*", "${PortableOutputName}*.*")
