@@ -12,10 +12,8 @@ Unicode True
 ; Main Install settings
 Name "${APPNAMEANDVERSION}"
 InstallDirRegKey HKLM "Software\${APPNAME}" ""
-InstallDir "$COMMONPROGRAMDATA\obs-studio\plugins"
+InstallDir "$COMMONPROGRAMDATA\obs-studio\plugins\win-spout"
 OutFile "..\..\release\OBS_Spout2_Plugin_Install_v${APPVERSION}.exe"
-
-Var INSTALL_BASE_DIR
 
 ; Use compression
 SetCompressor Zlib
@@ -39,9 +37,8 @@ SetCompressor Zlib
 !insertmacro MUI_LANGUAGE "English"
 !insertmacro MUI_RESERVEFILE_LANGDLL
 Section "Spout 2 OBS Plugin" Section1
-	StrCpy $INSTALL_BASE_DIR "$COMMONPROGRAMDATA\obs-studio\plugins\win-spout"
-
-	StrCpy $InstDir "$INSTALL_BASE_DIR"
+	; Install into the $INSTDIR chosen on the directory page (default
+	; ProgramData\obs-studio\plugins\win-spout) instead of always forcing ProgramData.
 
 	; Set Section properties
 	SetOverwrite on
@@ -58,6 +55,7 @@ Section "Spout 2 OBS Plugin" Section1
 	File "..\..\data\locale\en-US.ini"
 	File "..\..\data\locale\zh-CN.ini"
 	File "..\..\data\locale\pt-BR.ini"
+	File "..\..\data\locale\es-ES.ini"
 	CreateDirectory "$SMPROGRAMS\Spout 2 OBS Plugin"
 	CreateShortCut "$SMPROGRAMS\Spout 2 OBS Plugin\Uninstall Spout2 OBS Plugin.lnk" "$INSTDIR\uninstall-spout2-plugin.exe"
 
@@ -67,7 +65,7 @@ Section -FinishSection
 
 	WriteRegStr HKLM "Software\${APPNAME}" "InstallDir" "$INSTDIR"
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayName" "${APPNAME}"
-	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "UninstallString" "$INSTDIR\obs-plugins\uninstall-spout2-plugin.exe"
+	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "UninstallString" "$INSTDIR\uninstall-spout2-plugin.exe"
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "Publisher" "OBS Spout2 Plugin"
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "HelpLink" "https://github.com/Off-World-Live/obs-spout2-source-plugin"
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayVersion" "${APPVERSION}"
@@ -105,6 +103,7 @@ Section Uninstall
 	Delete "$INSTDIR\data\locale\en-US.ini"
 	Delete "$INSTDIR\data\locale\pt-BR.ini"
 	Delete "$INSTDIR\data\locale\zh-CN.ini"
+	Delete "$INSTDIR\data\locale\es-ES.ini"
 
 	; Remove remaining directories
 	RMDir "$SMPROGRAMS\Spout 2 OBS Plugin"
