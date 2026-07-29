@@ -13,6 +13,7 @@
 #include <media-io/video-frame.h>
 
 #include "SpoutDX.h"
+#include "win-spout-config.h"
 
 #define FILTER_PROP_NAME "spout_filter_name"
 
@@ -26,7 +27,6 @@ struct win_spout_filter {
 	// [SHARED]
 	spoutDX *filter_sender; // owned by the filter
 	obs_source_t *source_context;
-	const char *sender_name; // owned by obs
 
 	// [RENDER] After creation, only accessed on render thread
 	gs_texrender_t *texrender_curr;		// owned by filter
@@ -117,15 +117,29 @@ void win_spout_offscreen_render(void *data, uint32_t cx, uint32_t cy)
 	UNUSED_PARAMETER(cy);
 	struct win_spout_filter *context = (win_spout_filter *)data;
 
-	// We check if video_render has been called since the last offscreen_render
-	if (!context->is_active) {
+	// Continuous broadcast: ignore whether the source is in the active scene and keep
+	// rendering/broadcasting as long as the filter is enabled, so the sender registers
+	// right after a cold start (fixes receivers not seeing the signal). When off, keep
+	// the previous behaviour: send only when video_render has set is_active (source
+	// drawn). Default off.
+	const bool continuous = win_spout_config::get()->continuous_broadcast;
+
+	// Never broadcast while the filter is disabled, in either mode.
+	if (!obs_source_enabled(context->source_context)) {
+		context->is_active = false;
+		return;
+	}
+
+	if (!continuous && !context->is_active) {
 		return;
 	}
 	context->is_active = false;
 
 	if (!init_on_render_thread(context)) {
-		blog(LOG_ERROR, "Failed to create DX11 context for spout filter!");
-		win_spout_filter_destroy(context);
+		// The graphics device may not be ready during early cold start; just log and
+		// retry next frame. Never destroy context on the render thread here: OBS still
+		// holds this pointer and freeing it would crash (see #97).
+		blog(LOG_ERROR, "Failed to init DX11 for spout filter, will retry next frame");
 		return;
 	}
 
@@ -146,6 +160,11 @@ void win_spout_offscreen_render(void *data, uint32_t cx, uint32_t cy)
 
 	uint32_t width = obs_source_get_base_width(target);
 	uint32_t height = obs_source_get_base_height(target);
+
+	// Skip this frame when the size is invalid (the source may not be ready yet in
+	// continuous mode) to avoid operating on a zero-sized texture.
+	if (width == 0 || height == 0)
+		return;
 
 	// Render the target to an intemediate format in sRGB-aware format
 	gs_texrender_reset(texrender_intermediate);
@@ -241,7 +260,6 @@ void win_spout_filter_update(void *data, obs_data_t *settings)
 	pthread_mutex_lock(&context->mutex);
 
 	context->filter_sender->ReleaseSender();
-	context->sender_name = sender_name;
 	context->filter_sender->SetSenderName(sender_name);
 
 	pthread_mutex_unlock(&context->mutex);
@@ -255,7 +273,6 @@ void *win_spout_filter_create(obs_data_t *settings, obs_source_t *source)
 	// Despite bzalloc I still want to at least initialise pointer fields
 	context->filter_sender = nullptr;
 	context->source_context = nullptr;
-	context->sender_name = nullptr;
 	context->texrender_curr = nullptr;
 	context->texrender_prev = nullptr;
 	context->texrender_intermediate = nullptr;
@@ -271,8 +288,6 @@ void *win_spout_filter_create(obs_data_t *settings, obs_source_t *source)
 	}
 
 	context->source_context = source;
-
-	context->sender_name = obs_data_get_string(settings, FILTER_PROP_NAME);
 
 	context->filter_sender = new spoutDX;
 
