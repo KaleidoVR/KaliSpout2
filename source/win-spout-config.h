@@ -10,6 +10,8 @@
 #ifndef WINSPOUTCONFIG_H
 #define WINSPOUTCONFIG_H
 
+#include <atomic>
+
 #include <QString>
 #include <obs-module.h>
 
@@ -22,6 +24,12 @@ public:
 
 	bool auto_start;
 	QString spout_output_name;
+	// Continuous broadcast: when enabled, Spout output filters ignore whether their
+	// source is in the active scene, registering the sender and broadcasting from a
+	// cold start. When disabled the previous behaviour is kept (send only while the
+	// source is being rendered). Default off. Atomic because the render thread reads
+	// it every frame while the settings dialog writes it from the UI thread.
+	std::atomic<bool> continuous_broadcast;
 
 private:
 	static win_spout_config *_instance;
