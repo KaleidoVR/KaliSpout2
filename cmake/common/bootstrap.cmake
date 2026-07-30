@@ -56,6 +56,9 @@ set(PLUGIN_WEBSITE ${_website})
 set(PLUGIN_EMAIL ${_email})
 set(PLUGIN_VERSION ${_version})
 
+# project(VERSION) only accepts numeric components, so drop any -beta/-rc suffix
+string(REGEX MATCH "^[0-9]+\\.[0-9]+\\.[0-9]+" _version "${_version}")
+
 string(REPLACE "." ";" _version_canonical "${_version}")
 list(GET _version_canonical 0 PLUGIN_VERSION_MAJOR)
 list(GET _version_canonical 1 PLUGIN_VERSION_MINOR)
