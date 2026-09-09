@@ -418,14 +418,40 @@ static void spout_open_settings_dialog()
 	}
 }
 
-static void spout_ensure_kaleidovr_menu_action()
+static void spout_remove_empty_kaleidovr_menus(QMainWindow *main_window, QMenu *keep)
+{
+	if (!main_window || !main_window->menuBar()) {
+		return;
+	}
+
+	QList<QAction *> to_remove;
+	for (QAction *action : main_window->menuBar()->actions()) {
+		QMenu *menu = action->menu();
+		if (!menu || menu == keep) {
+			continue;
+		}
+		if (spout_strip_mnemonics(menu->title()).compare(QString::fromUtf8(KALEIDOVR_MENU_TITLE),
+								 Qt::CaseInsensitive) != 0) {
+			continue;
+		}
+		if (menu->actions().isEmpty()) {
+			to_remove.append(action);
+		}
+	}
+	for (QAction *action : to_remove) {
+		main_window->menuBar()->removeAction(action);
+		action->deleteLater();
+	}
+}
+
+static void spout_ensure_kaleidovr_menu_action(bool create_if_missing)
 {
 	QMainWindow *main_window = (QMainWindow *)obs_frontend_get_main_window();
 	if (!main_window) {
 		return;
 	}
 
-	QMenu *menu = spout_find_kaleidovr_menu(main_window, true);
+	QMenu *menu = spout_find_kaleidovr_menu(main_window, create_if_missing);
 	if (!menu) {
 		return;
 	}
@@ -434,13 +460,13 @@ static void spout_ensure_kaleidovr_menu_action()
 	const QString label_plain = spout_strip_mnemonics(label);
 
 	// Prefer an existing KaleidoVR menu that already has other KaleidoVR items
-	// (e.g. App Autostarter). If our action was created earlier under an empty
-	// duplicate menu, move it.
+	// (e.g. App Autostarter from Kaleido Launcher). If our action was created
+	// earlier under an empty duplicate menu, move it.
 	if (spout_menu_action) {
-		QWidget *parent_menu = spout_menu_action->parentWidget();
-		if (parent_menu != menu) {
+		if (spout_menu_action->parentWidget() != menu) {
 			menu->addAction(spout_menu_action);
 		}
+		spout_remove_empty_kaleidovr_menus(main_window, menu);
 		return;
 	}
 
@@ -449,6 +475,7 @@ static void spout_ensure_kaleidovr_menu_action()
 			spout_menu_action = action;
 			QObject::connect(spout_menu_action, &QAction::triggered, spout_open_settings_dialog,
 					 Qt::UniqueConnection);
+			spout_remove_empty_kaleidovr_menus(main_window, menu);
 			return;
 		}
 	}
@@ -456,6 +483,23 @@ static void spout_ensure_kaleidovr_menu_action()
 	spout_menu_action = menu->addAction(label);
 	spout_menu_action->setMenuRole(QAction::NoRole);
 	QObject::connect(spout_menu_action, &QAction::triggered, spout_open_settings_dialog);
+	spout_remove_empty_kaleidovr_menus(main_window, menu);
+}
+
+static void spout_schedule_kaleidovr_menu_action()
+{
+	QMainWindow *main_window = (QMainWindow *)obs_frontend_get_main_window();
+	if (!main_window) {
+		return;
+	}
+
+	// Kaleido Launcher creates QMenu("KaleidoVR") + "App Autostarter" inside its
+	// FINISHED_LOADING callback. Defer one event-loop tick so we attach to that
+	// same menu instead of creating a second KaleidoVR entry when Spout's callback
+	// runs first.
+	QTimer::singleShot(0, main_window, []() {
+		spout_ensure_kaleidovr_menu_action(true);
+	});
 }
 
 static void spout_obs_event(enum obs_frontend_event event, void *)
@@ -463,7 +507,7 @@ static void spout_obs_event(enum obs_frontend_event event, void *)
 	if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
 		obs_finished_loading = true;
 		autostart_retry_count = 0;
-		spout_ensure_kaleidovr_menu_action();
+		spout_schedule_kaleidovr_menu_action();
 		spout_schedule_autostart();
 		if (spout_output_settings) {
 			spout_output_settings->refresh_canvases();
@@ -514,9 +558,8 @@ bool obs_module_load(void)
 	spout_output_info = create_spout_output_info();
 	obs_register_output(&spout_output_info);
 
-	// Fork UX: put Spout under the KaleidoVR menu (with App Autostarter), not Tools.
-	spout_ensure_kaleidovr_menu_action();
-
+	// Menu is attached after FINISHED_LOADING so Kaleido Launcher can create the
+	// shared KaleidoVR menu first (see spout_schedule_kaleidovr_menu_action).
 	obs_frontend_add_event_callback(spout_obs_event, nullptr);
 
 	spout_filter_info = create_spout_filter_info();
