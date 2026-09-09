@@ -48,7 +48,6 @@ build
 !/logo/**
 !/source
 !.clang-format
-!.gersemirc
 !.gitignore
 !buildspec.json
 !CMakeLists.txt

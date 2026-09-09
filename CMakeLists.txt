@@ -7,8 +7,8 @@ if (NOT WIN32)
 	return()
 endif()
 
-option(ENABLE_FRONTEND_API "Use obs-frontend-api for UI functionality" OFF)
-option(ENABLE_QT "Use Qt functionality" OFF)
+option(ENABLE_FRONTEND_API "Use obs-frontend-api for UI functionality" ON)
+option(ENABLE_QT "Use Qt functionality" ON)
 
 include(compilerconfig)
 include(defaults)
@@ -45,10 +45,11 @@ endif()
 
 target_sources(
 	${CMAKE_PROJECT_NAME}
-	PRIVATE 
+	PRIVATE
 		source/win-spout.h
 		source/win-spout-config.h
 		source/ui/win-spout-output-settings.h
+		source/ui/win-spout-output-settings.ui
 		source/win-spout.cpp
 		source/win-spout-source.cpp
 		source/win-spout-output.cpp

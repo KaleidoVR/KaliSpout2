@@ -127,4 +127,3 @@ jobs:
           path: |
             ${{ github.workspace }}/release/${{ steps.setup.outputs.pluginName }}-${{ steps.setup.outputs.pluginVersion }}-windows-x64*.*
             ${{ github.workspace }}/release/KaliSpout2_Install_v${{ steps.setup.outputs.pluginVersion }}.exe
-            ${{ github.workspace }}/release/OBS_Spout2_Plugin_Install_v${{ steps.setup.outputs.pluginVersion }}.exe

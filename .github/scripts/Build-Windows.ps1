@@ -47,6 +47,12 @@ function Build {
     Push-Location -Stack BuildTemp
     Ensure-Location $ProjectRoot
 
+    $BuildSpec = Get-Content -Path "${ProjectRoot}/buildspec.json" -Raw | ConvertFrom-Json
+    $ProductName = $BuildSpec.displayName
+    if ([string]::IsNullOrWhiteSpace($ProductName)) {
+        $ProductName = $BuildSpec.name
+    }
+
     $CmakeArgs = @('--preset', "windows-ci-${Target}")
     $CmakeBuildArgs = @('--build')
     $CmakeInstallArgs = @()
