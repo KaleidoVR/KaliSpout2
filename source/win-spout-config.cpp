@@ -12,14 +12,22 @@
 #include <obs-frontend-api.h>
 #include <util/config-file.h>
 
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+
 #define SECTION_NAME "win_spout"
 #define PARAM_AUTO_START "auto_start"
 #define PARAM_SPOUT_OUTPUT_NAME "spout_output_name"
 #define PARAM_CONTINUOUS_BROADCAST "continuous_broadcast"
+#define PARAM_OUTPUTS_LIST "outputs_list"
 
 win_spout_config *win_spout_config::_instance = nullptr;
 
-win_spout_config::win_spout_config() : auto_start(false), spout_output_name("OBS_Spout"), continuous_broadcast(false)
+win_spout_config::win_spout_config()
+	: auto_start(false),
+	  spout_output_name("OBS_Spout"),
+	  continuous_broadcast(false)
 {
 	config_t *obs_config = obs_frontend_get_user_config();
 
@@ -28,7 +36,26 @@ win_spout_config::win_spout_config() : auto_start(false), spout_output_name("OBS
 		config_set_default_string(obs_config, SECTION_NAME, PARAM_SPOUT_OUTPUT_NAME,
 					  spout_output_name.toUtf8().constData());
 		config_set_default_bool(obs_config, SECTION_NAME, PARAM_CONTINUOUS_BROADCAST, continuous_broadcast);
+		config_set_default_string(obs_config, SECTION_NAME, PARAM_OUTPUTS_LIST, "");
 	}
+}
+
+void win_spout_config::migrate_legacy_output()
+{
+	if (!outputs.isEmpty()) {
+		return;
+	}
+
+	if (spout_output_name.isEmpty()) {
+		return;
+	}
+
+	SpoutOutputConfig conf;
+	conf.canvasUuid = QString();
+	conf.canvasName = QString();
+	conf.spoutName = spout_output_name;
+	conf.autoStart = auto_start;
+	outputs.append(conf);
 }
 
 void win_spout_config::load()
@@ -38,6 +65,28 @@ void win_spout_config::load()
 		auto_start = config_get_bool(obs_config, SECTION_NAME, PARAM_AUTO_START);
 		spout_output_name = config_get_string(obs_config, SECTION_NAME, PARAM_SPOUT_OUTPUT_NAME);
 		continuous_broadcast = config_get_bool(obs_config, SECTION_NAME, PARAM_CONTINUOUS_BROADCAST);
+
+		outputs.clear();
+		const char *json_str = config_get_string(obs_config, SECTION_NAME, PARAM_OUTPUTS_LIST);
+		if (json_str && *json_str) {
+			QJsonDocument doc = QJsonDocument::fromJson(QByteArray(json_str));
+			if (doc.isArray()) {
+				const QJsonArray arr = doc.array();
+				for (const auto &val : arr) {
+					const QJsonObject obj = val.toObject();
+					SpoutOutputConfig conf;
+					conf.canvasUuid = obj["canvasUuid"].toString();
+					conf.canvasName = obj["canvasName"].toString();
+					conf.spoutName = obj["spoutName"].toString();
+					conf.autoStart = obj["autoStart"].toBool();
+					if (!conf.spoutName.isEmpty()) {
+						outputs.append(conf);
+					}
+				}
+			}
+		}
+
+		migrate_legacy_output();
 	}
 }
 
@@ -49,6 +98,19 @@ void win_spout_config::save()
 		config_set_string(obs_config, SECTION_NAME, PARAM_SPOUT_OUTPUT_NAME,
 				  spout_output_name.toUtf8().constData());
 		config_set_bool(obs_config, SECTION_NAME, PARAM_CONTINUOUS_BROADCAST, continuous_broadcast);
+
+		QJsonArray arr;
+		for (const auto &conf : outputs) {
+			QJsonObject obj;
+			obj["canvasUuid"] = conf.canvasUuid;
+			obj["canvasName"] = conf.canvasName;
+			obj["spoutName"] = conf.spoutName;
+			obj["autoStart"] = conf.autoStart;
+			arr.append(obj);
+		}
+		QJsonDocument doc(arr);
+		config_set_string(obs_config, SECTION_NAME, PARAM_OUTPUTS_LIST,
+				  doc.toJson(QJsonDocument::Compact).constData());
 		config_save(obs_config);
 	}
 }

@@ -9,6 +9,7 @@
 
 #include <obs-module.h>
 #include <util/threading.h>
+#include <media-io/video-io.h>
 #include "win-spout.h"
 
 #include "SpoutDX.h"
@@ -113,19 +114,24 @@ bool win_spout_output_start(void *data)
 
 	pthread_mutex_lock(&context->mutex);
 
-	const char *senderName = context->senderName;
 	context->sender->SetSenderName(context->senderName);
 
 	obs_output_t *output = context->output;
 
 	pthread_mutex_unlock(&context->mutex);
 
-	int32_t width = (int32_t)obs_output_get_width(output);
-	int32_t height = (int32_t)obs_output_get_height(output);
-
 	video_t *video = obs_output_video(output);
 	if (!video) {
-		blog(LOG_ERROR, "Trying to start with no video!");
+		blog(LOG_ERROR, "Trying to start with no video! Bind the output to a canvas mix first.");
+		return false;
+	}
+
+	const struct video_output_info *voi = video_output_get_info(video);
+	int32_t width = voi ? (int32_t)voi->width : (int32_t)obs_output_get_width(output);
+	int32_t height = voi ? (int32_t)voi->height : (int32_t)obs_output_get_height(output);
+
+	if (width <= 0 || height <= 0) {
+		blog(LOG_ERROR, "Trying to start with invalid video size %ix%i", width, height);
 		return false;
 	}
 
@@ -134,11 +140,17 @@ bool win_spout_output_start(void *data)
 		return false;
 	}
 
+	// Convert only this output's connection to BGRA. The output must already be
+	// attached to a specific canvas video mix via obs_output_set_media so this
+	// conversion cannot rewrite other canvases' mixes.
 	video_scale_info info{};
-	// we enforce BGRA format as it works well with spout
 	info.format = VIDEO_FORMAT_BGRA;
-	info.width = width;
-	info.height = height;
+	info.width = (uint32_t)width;
+	info.height = (uint32_t)height;
+	if (voi) {
+		info.colorspace = voi->colorspace;
+		info.range = voi->range;
+	}
 
 	obs_output_set_video_conversion(output, &info);
 
@@ -203,7 +215,9 @@ void win_spout_output_rawvideo(void *data, struct video_data *frame)
 
 	pthread_mutex_lock(&context->mutex);
 
-	context->sender->SendImage(frame->data[0], width, height);
+	if (frame && frame->data[0]) {
+		context->sender->SendImage(frame->data[0], width, height);
+	}
 
 	pthread_mutex_unlock(&context->mutex);
 }

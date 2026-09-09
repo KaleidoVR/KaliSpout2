@@ -9,102 +9,132 @@
 			<rect>
 				<x>0</x>
 				<y>0</y>
-				<width>455</width>
-				<height>227</height>
+				<width>620</width>
+				<height>380</height>
 			</rect>
 		</property>
 		<property name="windowTitle">
 			<string>Win Spout Output Settings</string>
 		</property>
-		<widget class="QPushButton" name="pushButton_start">
-			<property name="geometry">
-				<rect>
-					<x>230</x>
-					<y>180</y>
-					<width>89</width>
-					<height>25</height>
-				</rect>
-			</property>
-			<property name="text">
-				<string>Start</string>
-			</property>
-		</widget>
-		<widget class="QPushButton" name="pushButton_stop">
-			<property name="geometry">
-				<rect>
-					<x>330</x>
-					<y>180</y>
-					<width>89</width>
-					<height>25</height>
-				</rect>
-			</property>
-			<property name="text">
-				<string>Stop</string>
-			</property>
-		</widget>
-		<widget class="QWidget" name="">
-			<property name="geometry">
-				<rect>
-					<x>42</x>
-					<y>43</y>
-					<width>381</width>
-					<height>114</height>
-				</rect>
-			</property>
-			<layout class="QVBoxLayout" name="verticalLayout_3">
-				<item>
-					<widget class="QCheckBox" name="checkBox_auto">
-						<property name="text">
-							<string>AutoStart</string>
-						</property>
-					</widget>
-				</item>
-				<item>
-					<widget class="QCheckBox" name="checkBox_continuous">
-						<property name="toolTip">
-							<string>When enabled, Spout output filters broadcast continuously, even when their source is not in the active scene.
+		<layout class="QVBoxLayout" name="verticalLayout_main">
+			<item>
+				<widget class="QLabel" name="label_help">
+					<property name="wordWrap">
+						<bool>true</bool>
+					</property>
+					<property name="text">
+						<string>Each row sends one OBS canvas (including Aitum extra canvases) as its own Spout sender. The output is bound to that canvas video mix so other canvases are not converted or blacked out.</string>
+					</property>
+				</widget>
+			</item>
+			<item>
+				<widget class="QCheckBox" name="checkBox_continuous">
+					<property name="toolTip">
+						<string>When enabled, Spout output filters broadcast continuously, even when their source is not in the active scene.
 
 This registers the sender right after a cold start, so receivers see it without opening the filter.
 
 The cost is some extra GPU for hidden sources.
 
 When disabled, the previous behaviour is kept: a filter only sends while its source is being rendered.</string>
-						</property>
+					</property>
+					<property name="text">
+						<string>Continuous filter broadcast</string>
+					</property>
+				</widget>
+			</item>
+			<item>
+				<widget class="QTableWidget" name="tableWidget_outputs">
+					<property name="columnCount">
+						<number>4</number>
+					</property>
+					<property name="selectionBehavior">
+						<enum>QAbstractItemView::SelectRows</enum>
+					</property>
+					<property name="selectionMode">
+						<enum>QAbstractItemView::SingleSelection</enum>
+					</property>
+					<column>
 						<property name="text">
-							<string>Continuous filter broadcast</string>
+							<string>Canvas</string>
 						</property>
-					</widget>
-				</item>
-				<item>
-					<layout class="QHBoxLayout" name="horizontalLayout">
-						<item>
-							<layout class="QVBoxLayout" name="verticalLayout_2">
-								<item>
-									<widget class="QLabel" name="label_spoutname">
-										<property name="text">
-											<string>Spout Output Name</string>
-										</property>
-									</widget>
-								</item>
-							</layout>
-						</item>
-						<item>
-							<layout class="QVBoxLayout" name="verticalLayout">
-								<item>
-									<widget class="QLineEdit" name="lineEdit_spoutname">
-										<property name="placeholderText">
-											<string>OBS_Spout</string>
-										</property>
-									</widget>
-								</item>
-							</layout>
-						</item>
-					</layout>
-				</item>
-			</layout>
-		</widget>
+					</column>
+					<column>
+						<property name="text">
+							<string>Spout Sender</string>
+						</property>
+					</column>
+					<column>
+						<property name="text">
+							<string>Auto-start</string>
+						</property>
+					</column>
+					<column>
+						<property name="text">
+							<string>Status</string>
+						</property>
+					</column>
+				</widget>
+			</item>
+			<item>
+				<layout class="QHBoxLayout" name="horizontalLayout_rows">
+					<item>
+						<widget class="QPushButton" name="pushButton_add">
+							<property name="text">
+								<string>Add canvas output</string>
+							</property>
+						</widget>
+					</item>
+					<item>
+						<widget class="QPushButton" name="pushButton_remove">
+							<property name="text">
+								<string>Remove</string>
+							</property>
+						</widget>
+					</item>
+					<item>
+						<spacer name="horizontalSpacer">
+							<property name="orientation">
+								<enum>Qt::Horizontal</enum>
+							</property>
+						</spacer>
+					</item>
+				</layout>
+			</item>
+			<item>
+				<layout class="QHBoxLayout" name="horizontalLayout_buttons">
+					<item>
+						<widget class="QPushButton" name="pushButton_start">
+							<property name="text">
+								<string>Start selected</string>
+							</property>
+						</widget>
+					</item>
+					<item>
+						<widget class="QPushButton" name="pushButton_stop">
+							<property name="text">
+								<string>Stop selected</string>
+							</property>
+						</widget>
+					</item>
+					<item>
+						<widget class="QPushButton" name="pushButton_start_all">
+							<property name="text">
+								<string>Start all</string>
+							</property>
+						</widget>
+					</item>
+					<item>
+						<widget class="QPushButton" name="pushButton_stop_all">
+							<property name="text">
+								<string>Stop all</string>
+							</property>
+						</widget>
+					</item>
+				</layout>
+			</item>
+		</layout>
 	</widget>
-	<layoutdefault spacing="6" margin="11" />
 	<resources />
 	<connections />
 </ui>

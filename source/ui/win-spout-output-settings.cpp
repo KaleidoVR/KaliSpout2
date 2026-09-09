@@ -10,9 +10,14 @@
 #include "win-spout-output-settings.h"
 #include "ui_win-spout-output-settings.h"
 #include <obs-frontend-api.h>
-#include <util/config-file.h>
 #include "../win-spout-config.h"
 #include "../win-spout.h"
+
+#include <QCheckBox>
+#include <QComboBox>
+#include <QHeaderView>
+#include <QLineEdit>
+#include <QShowEvent>
 
 extern win_spout_output_settings *spout_output_settings;
 
@@ -22,27 +27,181 @@ win_spout_output_settings::win_spout_output_settings(QWidget *parent)
 {
 	this->setAttribute(Qt::WA_DeleteOnClose);
 	ui->setupUi(this);
-	connect(ui->pushButton_start, SIGNAL(clicked(bool)), this, SLOT(on_start()));
-	connect(ui->pushButton_stop, SIGNAL(clicked(bool)), this, SLOT(on_stop()));
+
+	ui->tableWidget_outputs->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+	ui->tableWidget_outputs->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+	ui->tableWidget_outputs->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+	ui->tableWidget_outputs->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+	ui->tableWidget_outputs->verticalHeader()->setVisible(false);
+
+	connect(ui->pushButton_start, &QPushButton::clicked, this, &win_spout_output_settings::on_start_selected);
+	connect(ui->pushButton_stop, &QPushButton::clicked, this, &win_spout_output_settings::on_stop_selected);
+	connect(ui->pushButton_start_all, &QPushButton::clicked, this, &win_spout_output_settings::on_start_all);
+	connect(ui->pushButton_stop_all, &QPushButton::clicked, this, &win_spout_output_settings::on_stop_all);
+	connect(ui->pushButton_add, &QPushButton::clicked, this, &win_spout_output_settings::on_add_output);
+	connect(ui->pushButton_remove, &QPushButton::clicked, this, &win_spout_output_settings::on_remove_output);
+	connect(ui->checkBox_continuous, &QCheckBox::toggled, this, &win_spout_output_settings::on_table_changed);
 
 	win_spout_config *config = win_spout_config::get();
-
-	ui->checkBox_auto->setChecked(config->auto_start);
 	ui->checkBox_continuous->setChecked(config->continuous_broadcast);
-	ui->lineEdit_spoutname->setText(config->spout_output_name);
 
-	set_started_button_state(true);
-	if (config->auto_start)
-		on_start();
+	load_table();
+}
+
+void win_spout_output_settings::showEvent(QShowEvent *event)
+{
+	QDialog::showEvent(event);
+	refresh_canvases();
+}
+
+void win_spout_output_settings::populate_canvas_combo(QComboBox *combo, const QString &uuid, const QString &name)
+{
+	combo->clear();
+	const auto canvases = spout_get_canvas_list();
+	int select = 0;
+	int index = 0;
+	for (const auto &info : canvases) {
+		QString label = QString::fromStdString(info.name);
+		if (label.isEmpty()) {
+			label = obs_module_text("maincanvas");
+		}
+		if (info.is_main && label.compare("Main", Qt::CaseInsensitive) != 0) {
+			label = QString("%1 (%2)").arg(label, obs_module_text("maincanvas"));
+		}
+		combo->addItem(label, QString::fromStdString(info.uuid));
+		combo->setItemData(index, QString::fromStdString(info.name), Qt::UserRole + 1);
+		if ((!uuid.isEmpty() && uuid == QString::fromStdString(info.uuid)) ||
+		    (uuid.isEmpty() && !name.isEmpty() && name == QString::fromStdString(info.name)) ||
+		    (uuid.isEmpty() && name.isEmpty() && info.is_main)) {
+			select = index;
+		}
+		index++;
+	}
+	if (combo->count() == 0) {
+		combo->addItem(obs_module_text("maincanvas"), QString());
+		combo->setItemData(0, QString(), Qt::UserRole + 1);
+	}
+	combo->setCurrentIndex(select);
+}
+
+void win_spout_output_settings::load_table()
+{
+	win_spout_config *config = win_spout_config::get();
+	ui->tableWidget_outputs->setRowCount(0);
+
+	if (config->outputs.isEmpty()) {
+		on_add_output();
+		return;
+	}
+
+	for (const auto &conf : config->outputs) {
+		const int row = ui->tableWidget_outputs->rowCount();
+		ui->tableWidget_outputs->insertRow(row);
+
+		auto *combo = new QComboBox();
+		populate_canvas_combo(combo, conf.canvasUuid, conf.canvasName);
+		connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+			&win_spout_output_settings::on_table_changed);
+		ui->tableWidget_outputs->setCellWidget(row, 0, combo);
+
+		auto *nameEdit = new QLineEdit(conf.spoutName);
+		connect(nameEdit, &QLineEdit::textChanged, this, &win_spout_output_settings::on_table_changed);
+		ui->tableWidget_outputs->setCellWidget(row, 1, nameEdit);
+
+		auto *autoBox = new QCheckBox();
+		autoBox->setChecked(conf.autoStart);
+		connect(autoBox, &QCheckBox::toggled, this, &win_spout_output_settings::on_table_changed);
+		ui->tableWidget_outputs->setCellWidget(row, 2, autoBox);
+
+		ui->tableWidget_outputs->setItem(row, 3, new QTableWidgetItem());
+		update_row_running_state(row);
+	}
+}
+
+void win_spout_output_settings::row_canvas(int row, QString &uuid, QString &name)
+{
+	auto *combo = qobject_cast<QComboBox *>(ui->tableWidget_outputs->cellWidget(row, 0));
+	if (!combo) {
+		uuid.clear();
+		name.clear();
+		return;
+	}
+	uuid = combo->currentData().toString();
+	name = combo->currentData(Qt::UserRole + 1).toString();
+}
+
+QString win_spout_output_settings::row_sender(int row)
+{
+	auto *edit = qobject_cast<QLineEdit *>(ui->tableWidget_outputs->cellWidget(row, 1));
+	return edit ? edit->text() : QString();
+}
+
+bool win_spout_output_settings::row_autostart(int row)
+{
+	auto *box = qobject_cast<QCheckBox *>(ui->tableWidget_outputs->cellWidget(row, 2));
+	return box && box->isChecked();
+}
+
+void win_spout_output_settings::update_row_running_state(int row)
+{
+	QString uuid;
+	QString name;
+	row_canvas(row, uuid, name);
+	const bool active = spout_output_is_active(uuid.toUtf8().constData(), name.toUtf8().constData());
+	auto *item = ui->tableWidget_outputs->item(row, 3);
+	if (!item) {
+		item = new QTableWidgetItem();
+		ui->tableWidget_outputs->setItem(row, 3, item);
+	}
+	item->setText(active ? obs_module_text("statusrunning") : obs_module_text("statusstopped"));
+}
+
+void win_spout_output_settings::update_all_running_states()
+{
+	for (int row = 0; row < ui->tableWidget_outputs->rowCount(); row++) {
+		update_row_running_state(row);
+	}
+}
+
+void win_spout_output_settings::refresh_canvases()
+{
+	for (int row = 0; row < ui->tableWidget_outputs->rowCount(); row++) {
+		QString uuid;
+		QString name;
+		row_canvas(row, uuid, name);
+		auto *combo = qobject_cast<QComboBox *>(ui->tableWidget_outputs->cellWidget(row, 0));
+		if (combo) {
+			combo->blockSignals(true);
+			populate_canvas_combo(combo, uuid, name);
+			combo->blockSignals(false);
+		}
+		update_row_running_state(row);
+	}
 }
 
 void win_spout_output_settings::save_settings()
 {
 	win_spout_config *config = win_spout_config::get();
-	config->auto_start = ui->checkBox_auto->isChecked();
 	config->continuous_broadcast = ui->checkBox_continuous->isChecked();
-	config->spout_output_name = ui->lineEdit_spoutname->text();
-	win_spout_config::get()->save();
+	config->outputs.clear();
+	config->auto_start = false;
+
+	for (int row = 0; row < ui->tableWidget_outputs->rowCount(); row++) {
+		SpoutOutputConfig conf;
+		row_canvas(row, conf.canvasUuid, conf.canvasName);
+		conf.spoutName = row_sender(row);
+		conf.autoStart = row_autostart(row);
+		if (conf.autoStart) {
+			config->auto_start = true;
+		}
+		if (row == 0) {
+			config->spout_output_name = conf.spoutName;
+		}
+		if (!conf.spoutName.isEmpty()) {
+			config->outputs.append(conf);
+		}
+	}
+	config->save();
 }
 
 win_spout_output_settings::~win_spout_output_settings()
@@ -54,22 +213,102 @@ win_spout_output_settings::~win_spout_output_settings()
 	delete ui;
 }
 
-void win_spout_output_settings::on_start()
+void win_spout_output_settings::on_table_changed()
 {
-	QByteArray spout_output_name = ui->lineEdit_spoutname->text().toUtf8();
-	set_started_button_state(false);
 	save_settings();
-	spout_output_start(spout_output_name);
+	update_all_running_states();
 }
 
-void win_spout_output_settings::on_stop()
+void win_spout_output_settings::on_add_output()
 {
-	set_started_button_state(true);
-	spout_output_stop();
+	const int row = ui->tableWidget_outputs->rowCount();
+	ui->tableWidget_outputs->insertRow(row);
+
+	auto *combo = new QComboBox();
+	populate_canvas_combo(combo, QString(), QString());
+	connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+		&win_spout_output_settings::on_table_changed);
+	ui->tableWidget_outputs->setCellWidget(row, 0, combo);
+
+	QString sender = "OBS_Spout";
+	if (row > 0) {
+		sender = QString("OBS_Spout_%1").arg(row + 1);
+	}
+	auto *nameEdit = new QLineEdit(sender);
+	connect(nameEdit, &QLineEdit::textChanged, this, &win_spout_output_settings::on_table_changed);
+	ui->tableWidget_outputs->setCellWidget(row, 1, nameEdit);
+
+	auto *autoBox = new QCheckBox();
+	connect(autoBox, &QCheckBox::toggled, this, &win_spout_output_settings::on_table_changed);
+	ui->tableWidget_outputs->setCellWidget(row, 2, autoBox);
+
+	ui->tableWidget_outputs->setItem(row, 3, new QTableWidgetItem());
+	update_row_running_state(row);
+	save_settings();
 }
 
-void win_spout_output_settings::set_started_button_state(bool started)
+void win_spout_output_settings::on_remove_output()
 {
-	ui->pushButton_start->setEnabled(started);
-	ui->pushButton_stop->setEnabled(!started);
+	const int row = ui->tableWidget_outputs->currentRow();
+	if (row < 0) {
+		return;
+	}
+
+	QString uuid;
+	QString name;
+	row_canvas(row, uuid, name);
+	if (spout_output_is_active(uuid.toUtf8().constData(), name.toUtf8().constData())) {
+		spout_output_stop(uuid.toUtf8().constData(), name.toUtf8().constData());
+	}
+	ui->tableWidget_outputs->removeRow(row);
+	save_settings();
+}
+
+void win_spout_output_settings::on_start_selected()
+{
+	const int row = ui->tableWidget_outputs->currentRow();
+	if (row < 0) {
+		return;
+	}
+	save_settings();
+	QString uuid;
+	QString name;
+	row_canvas(row, uuid, name);
+	const QByteArray sender = row_sender(row).toUtf8();
+	spout_output_start(uuid.toUtf8().constData(), name.toUtf8().constData(), sender.constData());
+	update_row_running_state(row);
+}
+
+void win_spout_output_settings::on_stop_selected()
+{
+	const int row = ui->tableWidget_outputs->currentRow();
+	if (row < 0) {
+		return;
+	}
+	QString uuid;
+	QString name;
+	row_canvas(row, uuid, name);
+	spout_output_stop(uuid.toUtf8().constData(), name.toUtf8().constData());
+	update_row_running_state(row);
+}
+
+void win_spout_output_settings::on_start_all()
+{
+	save_settings();
+	for (int row = 0; row < ui->tableWidget_outputs->rowCount(); row++) {
+		QString uuid;
+		QString name;
+		row_canvas(row, uuid, name);
+		const QByteArray sender = row_sender(row).toUtf8();
+		if (!sender.isEmpty()) {
+			spout_output_start(uuid.toUtf8().constData(), name.toUtf8().constData(), sender.constData());
+		}
+	}
+	update_all_running_states();
+}
+
+void win_spout_output_settings::on_stop_all()
+{
+	spout_output_stop_all();
+	update_all_running_states();
 }
