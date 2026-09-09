@@ -29,6 +29,7 @@ constexpr int kEditorMinHeight = 40;
 constexpr int kEditorVPad = 5;
 constexpr int kEditorHPad = 8;
 constexpr int kEditorVMargin = 4;
+constexpr int kEditorHMargin = 6;
 constexpr int kAutoStartColumnWidth = 96;
 constexpr int kStatusColumnWidth = 88;
 constexpr int kCanvasComboMinContents = 10;
@@ -84,7 +85,7 @@ QWidget *wrap_editor(QWidget *editor)
 	auto *container = new QWidget();
 	container->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	auto *layout = new QHBoxLayout(container);
-	layout->setContentsMargins(0, kEditorVMargin, 0, kEditorVMargin);
+	layout->setContentsMargins(kEditorHMargin, kEditorVMargin, kEditorHMargin, kEditorVMargin);
 	layout->setSpacing(0);
 	layout->addWidget(editor, 1, Qt::AlignVCenter);
 	return container;
