@@ -33,6 +33,10 @@ win_spout_output_settings::win_spout_output_settings(QWidget *parent)
 	ui->tableWidget_outputs->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
 	ui->tableWidget_outputs->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
 	ui->tableWidget_outputs->verticalHeader()->setVisible(false);
+	if (auto *autoHeader = ui->tableWidget_outputs->horizontalHeaderItem(2)) {
+		autoHeader->setToolTip(
+			QString::fromUtf8(obs_module_text("autostarttip")));
+	}
 
 	connect(ui->pushButton_start, &QPushButton::clicked, this, &win_spout_output_settings::on_start_selected);
 	connect(ui->pushButton_stop, &QPushButton::clicked, this, &win_spout_output_settings::on_stop_selected);
@@ -108,10 +112,11 @@ void win_spout_output_settings::load_table()
 		connect(nameEdit, &QLineEdit::textChanged, this, &win_spout_output_settings::on_table_changed);
 		ui->tableWidget_outputs->setCellWidget(row, 1, nameEdit);
 
-		auto *autoBox = new QCheckBox();
-		autoBox->setChecked(conf.autoStart);
-		connect(autoBox, &QCheckBox::toggled, this, &win_spout_output_settings::on_table_changed);
-		ui->tableWidget_outputs->setCellWidget(row, 2, autoBox);
+	auto *autoBox = new QCheckBox();
+	autoBox->setToolTip(QString::fromUtf8(obs_module_text("autostarttip")));
+	autoBox->setChecked(conf.autoStart);
+	connect(autoBox, &QCheckBox::toggled, this, &win_spout_output_settings::on_table_changed);
+	ui->tableWidget_outputs->setCellWidget(row, 2, autoBox);
 
 		ui->tableWidget_outputs->setItem(row, 3, new QTableWidgetItem());
 		update_row_running_state(row);
@@ -239,6 +244,8 @@ void win_spout_output_settings::on_add_output()
 	ui->tableWidget_outputs->setCellWidget(row, 1, nameEdit);
 
 	auto *autoBox = new QCheckBox();
+	autoBox->setToolTip(QString::fromUtf8(obs_module_text("autostarttip")));
+	autoBox->setChecked(false);
 	connect(autoBox, &QCheckBox::toggled, this, &win_spout_output_settings::on_table_changed);
 	ui->tableWidget_outputs->setCellWidget(row, 2, autoBox);
 

@@ -40,9 +40,14 @@ public:
 	// it every frame while the settings dialog writes it from the UI thread.
 	std::atomic<bool> continuous_broadcast;
 
+	// Bumped when persisted settings semantics change. Used to clear stale AutoStart
+	// flags that survive OBS reinstalls while the Spout plugin/config remain (#92).
+	int config_version;
+
 private:
 	static win_spout_config *_instance;
 	void migrate_legacy_output();
+	void clear_autostart_flags();
 };
 
 #endif // WINSPOUTCONFIG_H

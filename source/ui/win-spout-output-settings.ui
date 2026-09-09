@@ -23,7 +23,7 @@
 						<bool>true</bool>
 					</property>
 					<property name="text">
-						<string>Each row sends one OBS canvas (including Aitum extra canvases) as its own Spout sender. The output is bound to that canvas video mix so other canvases are not converted or blacked out.</string>
+						<string>Each row sends one OBS canvas (including Aitum extra canvases) as its own Spout sender. The output is bound to that canvas video mix so other canvases are not converted or blacked out. Auto-start is off by default and only runs after OBS finishes loading when you enable it for a row.</string>
 					</property>
 				</widget>
 			</item>

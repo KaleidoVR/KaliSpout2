@@ -203,9 +203,10 @@ static const char *win_spout_source_get_name(void *unused)
 static void *win_spout_source_create(obs_data_t *settings, obs_source_t *source)
 {
 	struct spout_source *context = (spout_source *)bzalloc(sizeof(spout_source));
-	info("initialising spout source");
 	context->spout_receiver_ptr = GetSpout();
 	context->source = source;
+	// Name may still be unset during create; keep this at debug to avoid [(null)] info spam (#89).
+	debug("initialising spout source");
 	context->useFirstSender = true;
 	context->initialized = false;
 	context->tick_speed_limit = 0;
@@ -370,7 +371,16 @@ static bool win_spout_sender_exists(spout_source *context)
 static bool win_spout_sender_has_changed(spout_source *context)
 {
 	if (!win_spout_sender_exists(context)) {
-		return context->initialized;
+		if (!context->initialized) {
+			return false;
+		}
+		// Extra canvases can briefly report no senders while the shared
+		// texture is still valid. Require several misses before reset (#89).
+		context->sender_info_fail_count++;
+		if (context->sender_info_fail_count < 8) {
+			return false;
+		}
+		return true;
 	}
 
 	DWORD oldFormat = context->dxFormat;
@@ -404,8 +414,10 @@ static void win_spout_source_tick(void *data, float seconds)
 	pthread_mutex_unlock(&context->mutex);
 
 	if (changed) {
+		// Demote to debug: with multiple canvases this used to flood the log
+		// even when the sender was only briefly unreachable (#89).
 		if (context->tick_status != -1) {
-			info("Sender %s has changed / gone away. Resetting ", context->senderName);
+			debug("Sender %s has changed / gone away. Resetting", context->senderName);
 			context->tick_status = -1;
 		}
 		context->pending_reset = true;
@@ -415,6 +427,7 @@ static void win_spout_source_tick(void *data, float seconds)
 		if (context->tick_status != -2) {
 			context->tick_status = -2;
 		}
+		// Rate-limit recovery attempts via init()'s tick_speed_limit.
 		context->pending_reset = true;
 	}
 	if (context->tick_status != 0) {
