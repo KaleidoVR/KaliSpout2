@@ -11,17 +11,23 @@ Unicode True
 !define LEGACY_APPNAME "Spout 2 OBS Plugin"
 !define UNINSTALLER_NAME "uninstall-kalispout2.exe"
 !define LEGACY_UNINSTALLER_NAME "uninstall-spout2-plugin.exe"
+!define APPICON "..\..\logo\kalispout2.ico"
 
 Name "${APPNAMEANDVERSION}"
 InstallDirRegKey HKLM "Software\${APPNAME}" ""
 InstallDir "$COMMONPROGRAMDATA\obs-studio\plugins\win-spout"
 OutFile "..\..\release\KaliSpout2_Install_v${APPVERSION}.exe"
 
+Icon "${APPICON}"
+UninstallIcon "${APPICON}"
+
 SetCompressor Zlib
 
 !include "MUI.nsh"
 !include "LogicLib.nsh"
 
+!define MUI_ICON "${APPICON}"
+!define MUI_UNICON "${APPICON}"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TEXT "Setup will install KaliSpout2 for OBS Studio.$\r$\n$\r$\nIf an older Spout 2 OBS Plugin is present, it will be replaced automatically (same plugin folder: win-spout).$\r$\n$\r$\nClose OBS Studio before continuing."
 
@@ -93,8 +99,12 @@ Section "KaliSpout2" Section1
 	File "..\..\data\locale\pt-BR.ini"
 	File "..\..\data\locale\es-ES.ini"
 
+	; Branding icon for Apps & Features / Start Menu
+	SetOutPath "$INSTDIR"
+	File "/oname=kalispout2.ico" "${APPICON}"
+
 	CreateDirectory "$SMPROGRAMS\${APPNAME}"
-	CreateShortCut "$SMPROGRAMS\${APPNAME}\Uninstall KaliSpout2.lnk" "$INSTDIR\${UNINSTALLER_NAME}"
+	CreateShortCut "$SMPROGRAMS\${APPNAME}\Uninstall KaliSpout2.lnk" "$INSTDIR\${UNINSTALLER_NAME}" "" "$INSTDIR\kalispout2.ico"
 SectionEnd
 
 Section -FinishSection
@@ -104,7 +114,7 @@ Section -FinishSection
 
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayName" "${APPNAME}"
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "UninstallString" "$INSTDIR\${UNINSTALLER_NAME}"
-	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayIcon" "$INSTDIR\bin\64bit\win-spout.dll"
+	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayIcon" "$INSTDIR\kalispout2.ico"
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "Publisher" "KaleidoVR"
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "HelpLink" "https://github.com/KaleidoVR/KaliSpout2"
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "URLInfoAbout" "https://kalivr.com"
@@ -132,6 +142,7 @@ Section Uninstall
 
 	Delete "$INSTDIR\${UNINSTALLER_NAME}"
 	Delete "$INSTDIR\${LEGACY_UNINSTALLER_NAME}"
+	Delete "$INSTDIR\kalispout2.ico"
 	Delete "$SMPROGRAMS\${APPNAME}\Uninstall KaliSpout2.lnk"
 
 	Delete "$INSTDIR\bin\64bit\win-spout.dll"
