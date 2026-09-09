@@ -15,9 +15,48 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLineEdit>
 #include <QShowEvent>
+#include <QSizePolicy>
+
+namespace {
+
+constexpr int kOutputRowHeight = 36;
+constexpr int kCellEditorMinHeight = 28;
+
+void style_row_editors(QComboBox *combo, QLineEdit *nameEdit)
+{
+	if (combo) {
+		combo->setMinimumHeight(kCellEditorMinHeight);
+		combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+	}
+	if (nameEdit) {
+		nameEdit->setMinimumHeight(kCellEditorMinHeight);
+		nameEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+	}
+}
+
+QWidget *make_centered_autostart_cell(QCheckBox *autoBox)
+{
+	auto *container = new QWidget();
+	auto *layout = new QHBoxLayout(container);
+	layout->setContentsMargins(0, 0, 0, 0);
+	layout->setSpacing(0);
+	layout->addStretch();
+	layout->addWidget(autoBox, 0, Qt::AlignCenter);
+	layout->addStretch();
+	container->setMinimumHeight(kOutputRowHeight);
+	return container;
+}
+
+QCheckBox *autostart_checkbox_from_cell(QWidget *cell)
+{
+	return cell ? cell->findChild<QCheckBox *>() : nullptr;
+}
+
+} // namespace
 
 extern win_spout_output_settings *spout_output_settings;
 
@@ -33,6 +72,10 @@ win_spout_output_settings::win_spout_output_settings(QWidget *parent)
 	ui->tableWidget_outputs->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
 	ui->tableWidget_outputs->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
 	ui->tableWidget_outputs->verticalHeader()->setVisible(false);
+	ui->tableWidget_outputs->verticalHeader()->setDefaultSectionSize(kOutputRowHeight);
+	ui->tableWidget_outputs->verticalHeader()->setMinimumSectionSize(kOutputRowHeight);
+	ui->tableWidget_outputs->setStyleSheet(
+		QStringLiteral("QTableWidget::item { padding-top: 4px; padding-bottom: 4px; }"));
 	if (auto *autoHeader = ui->tableWidget_outputs->horizontalHeaderItem(2)) {
 		autoHeader->setToolTip(
 			QString::fromUtf8(obs_module_text("autostarttip")));
@@ -111,12 +154,14 @@ void win_spout_output_settings::load_table()
 		auto *nameEdit = new QLineEdit(conf.spoutName);
 		connect(nameEdit, &QLineEdit::textChanged, this, &win_spout_output_settings::on_table_changed);
 		ui->tableWidget_outputs->setCellWidget(row, 1, nameEdit);
+		style_row_editors(combo, nameEdit);
 
-	auto *autoBox = new QCheckBox();
-	autoBox->setToolTip(QString::fromUtf8(obs_module_text("autostarttip")));
-	autoBox->setChecked(conf.autoStart);
-	connect(autoBox, &QCheckBox::toggled, this, &win_spout_output_settings::on_table_changed);
-	ui->tableWidget_outputs->setCellWidget(row, 2, autoBox);
+		auto *autoBox = new QCheckBox();
+		autoBox->setToolTip(QString::fromUtf8(obs_module_text("autostarttip")));
+		autoBox->setChecked(conf.autoStart);
+		connect(autoBox, &QCheckBox::toggled, this, &win_spout_output_settings::on_table_changed);
+		ui->tableWidget_outputs->setCellWidget(row, 2, make_centered_autostart_cell(autoBox));
+		ui->tableWidget_outputs->setRowHeight(row, kOutputRowHeight);
 
 		ui->tableWidget_outputs->setItem(row, 3, new QTableWidgetItem());
 		update_row_running_state(row);
@@ -143,7 +188,7 @@ QString win_spout_output_settings::row_sender(int row)
 
 bool win_spout_output_settings::row_autostart(int row)
 {
-	auto *box = qobject_cast<QCheckBox *>(ui->tableWidget_outputs->cellWidget(row, 2));
+	auto *box = autostart_checkbox_from_cell(ui->tableWidget_outputs->cellWidget(row, 2));
 	return box && box->isChecked();
 }
 
@@ -242,12 +287,14 @@ void win_spout_output_settings::on_add_output()
 	auto *nameEdit = new QLineEdit(sender);
 	connect(nameEdit, &QLineEdit::textChanged, this, &win_spout_output_settings::on_table_changed);
 	ui->tableWidget_outputs->setCellWidget(row, 1, nameEdit);
+	style_row_editors(combo, nameEdit);
 
 	auto *autoBox = new QCheckBox();
 	autoBox->setToolTip(QString::fromUtf8(obs_module_text("autostarttip")));
 	autoBox->setChecked(false);
 	connect(autoBox, &QCheckBox::toggled, this, &win_spout_output_settings::on_table_changed);
-	ui->tableWidget_outputs->setCellWidget(row, 2, autoBox);
+	ui->tableWidget_outputs->setCellWidget(row, 2, make_centered_autostart_cell(autoBox));
+	ui->tableWidget_outputs->setRowHeight(row, kOutputRowHeight);
 
 	ui->tableWidget_outputs->setItem(row, 3, new QTableWidgetItem());
 	update_row_running_state(row);
