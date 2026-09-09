@@ -32,7 +32,6 @@ constexpr int kEditorVMargin = 4;
 constexpr int kAutoStartColumnWidth = 96;
 constexpr int kStatusColumnWidth = 88;
 constexpr int kCanvasComboMinContents = 10;
-constexpr int kCanvasComboMaxWidth = 200;
 
 int matched_editor_height(QWidget *widget)
 {
@@ -71,8 +70,7 @@ void style_matched_editors(QComboBox *combo, QLineEdit *nameEdit)
 		combo->setFixedHeight(editorH);
 		combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
 		combo->setMinimumContentsLength(kCanvasComboMinContents);
-		combo->setMaximumWidth(kCanvasComboMaxWidth);
-		combo->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+		combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 	}
 	if (nameEdit) {
 		nameEdit->setStyleSheet(QStringLiteral("QLineEdit { %1 }").arg(pad));
@@ -81,19 +79,14 @@ void style_matched_editors(QComboBox *combo, QLineEdit *nameEdit)
 	}
 }
 
-QWidget *wrap_editor(QWidget *editor, bool fill_width)
+QWidget *wrap_editor(QWidget *editor)
 {
 	auto *container = new QWidget();
 	container->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	auto *layout = new QHBoxLayout(container);
-	layout->setContentsMargins(2, kEditorVMargin, 2, kEditorVMargin);
+	layout->setContentsMargins(0, kEditorVMargin, 0, kEditorVMargin);
 	layout->setSpacing(0);
-	if (fill_width) {
-		layout->addWidget(editor, 1, Qt::AlignVCenter);
-	} else {
-		layout->addWidget(editor, 0, Qt::AlignLeft | Qt::AlignVCenter);
-		layout->addStretch(1);
-	}
+	layout->addWidget(editor, 1, Qt::AlignVCenter);
 	return container;
 }
 
@@ -135,7 +128,7 @@ win_spout_output_settings::win_spout_output_settings(QWidget *parent)
 
 	auto *header = ui->tableWidget_outputs->horizontalHeader();
 	header->setMinimumSectionSize(72);
-	header->setSectionResizeMode(0, QHeaderView::Fixed);
+	header->setSectionResizeMode(0, QHeaderView::Stretch);
 	header->setSectionResizeMode(1, QHeaderView::Stretch);
 	header->setSectionResizeMode(2, QHeaderView::Fixed);
 	header->setSectionResizeMode(3, QHeaderView::Fixed);
@@ -147,7 +140,6 @@ win_spout_output_settings::win_spout_output_settings(QWidget *parent)
 					     "  padding-bottom: 4px;"
 					     "}")
 				      .arg(kEditorHPad));
-	ui->tableWidget_outputs->setColumnWidth(0, kCanvasComboMaxWidth + 16);
 	ui->tableWidget_outputs->setColumnWidth(2, kAutoStartColumnWidth);
 	ui->tableWidget_outputs->setColumnWidth(3, kStatusColumnWidth);
 	ui->tableWidget_outputs->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -244,8 +236,8 @@ void win_spout_output_settings::load_table()
 		auto *nameEdit = new QLineEdit(conf.spoutName);
 		connect(nameEdit, &QLineEdit::textChanged, this, &win_spout_output_settings::handle_table_changed);
 		style_matched_editors(combo, nameEdit);
-		ui->tableWidget_outputs->setCellWidget(row, 0, wrap_editor(combo, false));
-		ui->tableWidget_outputs->setCellWidget(row, 1, wrap_editor(nameEdit, true));
+		ui->tableWidget_outputs->setCellWidget(row, 0, wrap_editor(combo));
+		ui->tableWidget_outputs->setCellWidget(row, 1, wrap_editor(nameEdit));
 
 		auto *autoBox = new QCheckBox();
 		autoBox->setToolTip(QString::fromUtf8(obs_module_text("autostarttip")));
@@ -378,8 +370,8 @@ void win_spout_output_settings::handle_add_output()
 	auto *nameEdit = new QLineEdit(sender);
 	connect(nameEdit, &QLineEdit::textChanged, this, &win_spout_output_settings::handle_table_changed);
 	style_matched_editors(combo, nameEdit);
-	ui->tableWidget_outputs->setCellWidget(row, 0, wrap_editor(combo, false));
-	ui->tableWidget_outputs->setCellWidget(row, 1, wrap_editor(nameEdit, true));
+	ui->tableWidget_outputs->setCellWidget(row, 0, wrap_editor(combo));
+	ui->tableWidget_outputs->setCellWidget(row, 1, wrap_editor(nameEdit));
 
 	auto *autoBox = new QCheckBox();
 	autoBox->setToolTip(QString::fromUtf8(obs_module_text("autostarttip")));
