@@ -24,8 +24,9 @@
 
 namespace {
 
-constexpr int kOutputRowHeight = 28;
-constexpr int kEditorHeight = 24;
+constexpr int kOutputRowHeight = 40;
+constexpr int kEditorHeight = 32;
+constexpr int kEditorVMargin = 3;
 constexpr int kAutoStartColumnWidth = 96;
 constexpr int kStatusColumnWidth = 88;
 constexpr int kCanvasComboMinContents = 10;
@@ -34,9 +35,8 @@ constexpr int kEditorHPad = 8;
 
 void style_matched_editors(QComboBox *combo, QLineEdit *nameEdit)
 {
-	// Cell widgets are resized to the full cell. Keep Canvas in a wrapper with a
-	// fixed inner height so it cannot overflow/clip the row. Horizontal padding
-	// only — vertical stylesheet padding + min-height is what made combos too tall.
+	// Keep row height and editor height in lockstep so text is readable without
+	// overflowing the cell. Horizontal padding only — no stylesheet min-height.
 	const QString hpad = QStringLiteral("padding-left: %1px; padding-right: 6px;").arg(kEditorHPad);
 	if (combo) {
 		combo->setStyleSheet(QStringLiteral("QComboBox { %1 }").arg(hpad));
@@ -58,8 +58,8 @@ QWidget *wrap_editor(QWidget *editor, bool fill_width)
 	auto *container = new QWidget();
 	container->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	auto *layout = new QHBoxLayout(container);
-	// Zero margins so the fixed-height editor fits inside the row without clipping.
-	layout->setContentsMargins(0, 0, 0, 0);
+	// Small vertical margin so the control sits inside the row grid lines.
+	layout->setContentsMargins(2, kEditorVMargin, 2, kEditorVMargin);
 	layout->setSpacing(0);
 	if (fill_width) {
 		layout->addWidget(editor, 1, Qt::AlignVCenter);
