@@ -16,6 +16,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QGridLayout>
+#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLineEdit>
 #include <QShowEvent>
@@ -27,6 +28,8 @@ constexpr int kOutputRowHeight = 36;
 constexpr int kEditorMinHeight = 28;
 constexpr int kAutoStartColumnWidth = 96;
 constexpr int kStatusColumnWidth = 88;
+constexpr int kCanvasComboMinContents = 10;
+constexpr int kCanvasComboMaxWidth = 200;
 
 void style_matched_editors(QComboBox *combo, QLineEdit *nameEdit)
 {
@@ -35,12 +38,27 @@ void style_matched_editors(QComboBox *combo, QLineEdit *nameEdit)
 	if (combo) {
 		combo->setStyleSheet(QStringLiteral("QComboBox { min-height: %1px; }").arg(kEditorMinHeight));
 		combo->setMinimumHeight(kEditorMinHeight);
-		combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+		combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+		combo->setMinimumContentsLength(kCanvasComboMinContents);
+		combo->setMaximumWidth(kCanvasComboMaxWidth);
+		combo->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
 	}
 	if (nameEdit) {
 		nameEdit->setMinimumHeight(kEditorMinHeight);
 		nameEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	}
+}
+
+QWidget *wrap_canvas_combo(QComboBox *combo)
+{
+	auto *container = new QWidget();
+	container->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+	auto *layout = new QHBoxLayout(container);
+	layout->setContentsMargins(2, 2, 2, 2);
+	layout->setSpacing(0);
+	layout->addWidget(combo, 0, Qt::AlignLeft | Qt::AlignVCenter);
+	layout->addStretch(1);
+	return container;
 }
 
 QWidget *make_centered_autostart_cell(QCheckBox *autoBox)
@@ -81,11 +99,12 @@ win_spout_output_settings::win_spout_output_settings(QWidget *parent)
 
 	auto *header = ui->tableWidget_outputs->horizontalHeader();
 	header->setMinimumSectionSize(72);
-	header->setSectionResizeMode(0, QHeaderView::Stretch);
+	header->setSectionResizeMode(0, QHeaderView::Fixed);
 	header->setSectionResizeMode(1, QHeaderView::Stretch);
 	header->setSectionResizeMode(2, QHeaderView::Fixed);
 	header->setSectionResizeMode(3, QHeaderView::Fixed);
 	header->setStretchLastSection(false);
+	ui->tableWidget_outputs->setColumnWidth(0, kCanvasComboMaxWidth + 16);
 	ui->tableWidget_outputs->setColumnWidth(2, kAutoStartColumnWidth);
 	ui->tableWidget_outputs->setColumnWidth(3, kStatusColumnWidth);
 	ui->tableWidget_outputs->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -177,12 +196,12 @@ void win_spout_output_settings::load_table()
 		populate_canvas_combo(combo, conf.canvasUuid, conf.canvasName);
 		connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
 			&win_spout_output_settings::on_table_changed);
-		ui->tableWidget_outputs->setCellWidget(row, 0, combo);
 
 		auto *nameEdit = new QLineEdit(conf.spoutName);
 		connect(nameEdit, &QLineEdit::textChanged, this, &win_spout_output_settings::on_table_changed);
-		ui->tableWidget_outputs->setCellWidget(row, 1, nameEdit);
 		style_matched_editors(combo, nameEdit);
+		ui->tableWidget_outputs->setCellWidget(row, 0, wrap_canvas_combo(combo));
+		ui->tableWidget_outputs->setCellWidget(row, 1, nameEdit);
 
 		auto *autoBox = new QCheckBox();
 		autoBox->setToolTip(QString::fromUtf8(obs_module_text("autostarttip")));
@@ -307,7 +326,6 @@ void win_spout_output_settings::on_add_output()
 	populate_canvas_combo(combo, QString(), QString());
 	connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
 		&win_spout_output_settings::on_table_changed);
-	ui->tableWidget_outputs->setCellWidget(row, 0, combo);
 
 	QString sender = "OBS_Spout";
 	if (row > 0) {
@@ -315,8 +333,9 @@ void win_spout_output_settings::on_add_output()
 	}
 	auto *nameEdit = new QLineEdit(sender);
 	connect(nameEdit, &QLineEdit::textChanged, this, &win_spout_output_settings::on_table_changed);
-	ui->tableWidget_outputs->setCellWidget(row, 1, nameEdit);
 	style_matched_editors(combo, nameEdit);
+	ui->tableWidget_outputs->setCellWidget(row, 0, wrap_canvas_combo(combo));
+	ui->tableWidget_outputs->setCellWidget(row, 1, nameEdit);
 
 	auto *autoBox = new QCheckBox();
 	autoBox->setToolTip(QString::fromUtf8(obs_module_text("autostarttip")));
