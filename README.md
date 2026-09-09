@@ -18,9 +18,9 @@ This plugin implements the SPOUT2 SDK, creates an OBS Source from the SPOUT shar
 
 ## OBS 32.2+ canvases (Aitum Vertical / Stream Suite / Multistream)
 
-Tools → Spout Output Settings lists every frontend canvas and can start a separate Spout sender per canvas. Each output is bound with `obs_output_set_media` to that canvas's video mix so BGRA conversion does not take over the global mix or black out extra canvases.
+Open **KaleidoVR → Spout Output Settings** (this KaleidoVR fork places the dialog under the KaleidoVR menu alongside App Autostarter, not under Tools). The dialog lists every frontend canvas and can start a separate Spout sender per canvas. Each output is bound with `obs_output_set_media` to that canvas's video mix so BGRA conversion does not take over the global mix or black out extra canvases.
 
-Auto-start is opt-in per canvas, defaults off, and is delayed until `OBS_FRONTEND_EVENT_FINISHED_LOADING` (queued on the UI thread) so canvas plugins can finish `obs_canvas_reset_video` first. If a canvas is added later (common with Aitum), Auto-start is retried on `OBS_FRONTEND_EVENT_CANVAS_ADDED`. Upgrading clears stale Auto-start flags that previously survived OBS reinstalls while the Spout user config remained (see Off-World-Live issues #89 / #92).
+Auto-start is opt-in per canvas, defaults off, and is delayed until `OBS_FRONTEND_EVENT_FINISHED_LOADING` (queued on the UI thread) so canvas plugins can finish `obs_canvas_reset_video` first. If a canvas is added later (common with Aitum), Auto-start is retried on `OBS_FRONTEND_EVENT_CANVAS_ADDED` and again on a short timer until the canvas video mix exists. Upgrading clears stale Auto-start flags that previously survived OBS reinstalls while the Spout user config remained (see Off-World-Live issues #89 / #92).
 
 Spout Capture sources no longer treat extra-canvas redraws as a sender reset, keep GPU textures until the source is hidden on every canvas, and rate-limit transient "sender gone" resets that previously flooded the OBS log. Extra-canvas Tools outputs never fall back to the main mix when their own video mix is missing.
 

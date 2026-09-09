@@ -11,7 +11,10 @@
 #include <obs-frontend-api.h>
 #include <QAction>
 #include <QMainWindow>
+#include <QMenu>
+#include <QMenuBar>
 #include <QMetaObject>
+#include <QTimer>
 #include <cstdio>
 #include <map>
 #include <mutex>
@@ -22,7 +25,7 @@
 #include "win-spout-config.h"
 
 OBS_DECLARE_MODULE()
-OBS_MODULE_AUTHOR("Off World Live")
+OBS_MODULE_AUTHOR("Off World Live / KaleidoVR")
 OBS_MODULE_USE_DEFAULT_LOCALE("win-spout", "en-US")
 
 extern struct obs_source_info create_spout_source_info();
@@ -45,8 +48,13 @@ struct SpoutActiveOutput {
 static std::mutex outputs_mutex;
 static std::map<std::string, SpoutActiveOutput> active_outputs;
 static bool obs_finished_loading = false;
+static int autostart_retry_count = 0;
+static QAction *spout_menu_action = nullptr;
 
 static const char *MAIN_CANVAS_KEY = "__obs_main_canvas__";
+static const char *KALEIDOVR_MENU_TITLE = "KaleidoVR";
+static const int AUTOSTART_MAX_RETRIES = 20;
+static const int AUTOSTART_RETRY_MS = 500;
 
 static bool canvas_name_is_main(const char *name)
 {
@@ -225,7 +233,8 @@ bool spout_output_start(const char *canvasUuid, const char *canvasName, const ch
 	obs_canvas_release(canvas);
 
 	if (!obs_output_video(output)) {
-		blog(LOG_ERROR, "Canvas '%s' has no video mix; not starting Spout (this would black-out other canvases)",
+		blog(LOG_WARNING,
+		     "Canvas '%s' has no video mix yet; Spout start deferred (refusing to bind another mix)",
 		     canvasName && *canvasName ? canvasName : "Main");
 		return false;
 	}
@@ -320,6 +329,7 @@ void spout_schedule_autostart()
 		main_window,
 		[]() {
 			win_spout_config *config = win_spout_config::get();
+			bool pending = false;
 			for (const auto &conf : config->outputs) {
 				if (!conf.autoStart || conf.spoutName.isEmpty()) {
 					continue;
@@ -328,18 +338,132 @@ void spout_schedule_autostart()
 							   conf.canvasName.toUtf8().constData())) {
 					continue;
 				}
-				spout_output_start(conf.canvasUuid.toUtf8().constData(),
-						   conf.canvasName.toUtf8().constData(),
-						   conf.spoutName.toUtf8().constData());
+				if (!spout_output_start(conf.canvasUuid.toUtf8().constData(),
+							conf.canvasName.toUtf8().constData(),
+							conf.spoutName.toUtf8().constData())) {
+					pending = true;
+				}
+			}
+
+			if (pending && autostart_retry_count < AUTOSTART_MAX_RETRIES) {
+				autostart_retry_count++;
+				QMainWindow *window = (QMainWindow *)obs_frontend_get_main_window();
+				if (window) {
+					QTimer::singleShot(AUTOSTART_RETRY_MS, window, []() { spout_schedule_autostart(); });
+				}
 			}
 		},
 		Qt::QueuedConnection);
+}
+
+static QString spout_strip_mnemonics(QString title)
+{
+	return title.remove('&');
+}
+
+static QMenu *spout_find_kaleidovr_menu(QMainWindow *main_window, bool create_if_missing)
+{
+	if (!main_window || !main_window->menuBar()) {
+		return nullptr;
+	}
+
+	QMenuBar *bar = main_window->menuBar();
+	QMenu *empty_match = nullptr;
+	QMenu *populated_match = nullptr;
+
+	for (QAction *action : bar->actions()) {
+		QMenu *menu = action->menu();
+		if (!menu) {
+			continue;
+		}
+		if (spout_strip_mnemonics(menu->title()).compare(QString::fromUtf8(KALEIDOVR_MENU_TITLE),
+								 Qt::CaseInsensitive) != 0) {
+			continue;
+		}
+		if (!menu->actions().isEmpty()) {
+			populated_match = menu;
+		} else if (!empty_match) {
+			empty_match = menu;
+		}
+	}
+
+	if (populated_match) {
+		return populated_match;
+	}
+	if (empty_match) {
+		return empty_match;
+	}
+	if (create_if_missing) {
+		return bar->addMenu(QString::fromUtf8(KALEIDOVR_MENU_TITLE));
+	}
+	return nullptr;
+}
+
+static void spout_open_settings_dialog()
+{
+	if (!spout_output_settings) {
+		QMainWindow *main_window = (QMainWindow *)obs_frontend_get_main_window();
+		if (!main_window) {
+			blog(LOG_ERROR, "Can't get main window!");
+			return;
+		}
+		obs_frontend_push_ui_translation(obs_module_get_string);
+		spout_output_settings = new win_spout_output_settings(main_window);
+		obs_frontend_pop_ui_translation();
+		spout_output_settings->show();
+	} else {
+		spout_output_settings->show();
+		spout_output_settings->raise();
+		spout_output_settings->activateWindow();
+	}
+}
+
+static void spout_ensure_kaleidovr_menu_action()
+{
+	QMainWindow *main_window = (QMainWindow *)obs_frontend_get_main_window();
+	if (!main_window) {
+		return;
+	}
+
+	QMenu *menu = spout_find_kaleidovr_menu(main_window, true);
+	if (!menu) {
+		return;
+	}
+
+	const QString label = QString::fromUtf8(obs_module_text("toolslabel"));
+	const QString label_plain = spout_strip_mnemonics(label);
+
+	// Prefer an existing KaleidoVR menu that already has other KaleidoVR items
+	// (e.g. App Autostarter). If our action was created earlier under an empty
+	// duplicate menu, move it.
+	if (spout_menu_action) {
+		QWidget *parent_menu = spout_menu_action->parentWidget();
+		if (parent_menu != menu) {
+			menu->addAction(spout_menu_action);
+		}
+		return;
+	}
+
+	for (QAction *action : menu->actions()) {
+		if (spout_strip_mnemonics(action->text()).compare(label_plain, Qt::CaseInsensitive) == 0) {
+			spout_menu_action = action;
+			QObject::connect(spout_menu_action, &QAction::triggered, spout_open_settings_dialog,
+					 Qt::UniqueConnection);
+			return;
+		}
+	}
+
+	spout_menu_action = menu->addAction(label);
+	spout_menu_action->setMenuRole(QAction::NoRole);
+	QObject::connect(spout_menu_action, &QAction::triggered, spout_open_settings_dialog);
 }
 
 static void spout_obs_event(enum obs_frontend_event event, void *)
 {
 	if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
 		obs_finished_loading = true;
+		autostart_retry_count = 0;
+		spout_ensure_kaleidovr_menu_action();
 		spout_schedule_autostart();
 		if (spout_output_settings) {
 			spout_output_settings->refresh_canvases();
@@ -368,6 +492,7 @@ static void spout_obs_event(enum obs_frontend_event event, void *)
 		} else {
 			// Aitum / Stream Suite may create canvases after FINISHED_LOADING.
 			// Retry Auto-start once the canvas (and its video mix) exists.
+			autostart_retry_count = 0;
 			spout_schedule_autostart();
 		}
 		if (spout_output_settings) {
@@ -389,33 +514,15 @@ bool obs_module_load(void)
 	spout_output_info = create_spout_output_info();
 	obs_register_output(&spout_output_info);
 
-	QAction *menu_action = (QAction *)obs_frontend_add_tools_menu_qaction(obs_module_text("toolslabel"));
-
-	auto menu_cb = [] {
-		if (!spout_output_settings) {
-			QMainWindow *main_window = (QMainWindow *)obs_frontend_get_main_window();
-			if (!main_window) {
-				blog(LOG_ERROR, "Can't get main window!");
-				return;
-			}
-			obs_frontend_push_ui_translation(obs_module_get_string);
-			spout_output_settings = new win_spout_output_settings(main_window);
-			obs_frontend_pop_ui_translation();
-			spout_output_settings->show();
-		} else {
-			spout_output_settings->show();
-			spout_output_settings->raise();
-			spout_output_settings->activateWindow();
-		}
-	};
-	menu_action->connect(menu_action, &QAction::triggered, menu_cb);
+	// Fork UX: put Spout under the KaleidoVR menu (with App Autostarter), not Tools.
+	spout_ensure_kaleidovr_menu_action();
 
 	obs_frontend_add_event_callback(spout_obs_event, nullptr);
 
 	spout_filter_info = create_spout_filter_info();
 	obs_register_source(&spout_filter_info);
 
-	blog(LOG_INFO, "win-spout loaded (OBS canvas-aware Spout output)!");
+	blog(LOG_INFO, "win-spout loaded (OBS canvas-aware Spout output, KaleidoVR menu)!");
 
 	return true;
 }

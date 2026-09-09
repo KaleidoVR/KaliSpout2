@@ -139,7 +139,12 @@ void win_spout_offscreen_render(void *data, uint32_t cx, uint32_t cy)
 		// The graphics device may not be ready during early cold start; just log and
 		// retry next frame. Never destroy context on the render thread here: OBS still
 		// holds this pointer and freeing it would crash (see #97).
-		blog(LOG_ERROR, "Failed to init DX11 for spout filter, will retry next frame");
+		static ULONGLONG last_filter_init_log = 0;
+		const ULONGLONG now = GetTickCount64();
+		if (now - last_filter_init_log > 2000) {
+			blog(LOG_WARNING, "Failed to init DX11 for spout filter, will retry");
+			last_filter_init_log = now;
+		}
 		return;
 	}
 

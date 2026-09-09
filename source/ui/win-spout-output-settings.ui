@@ -14,7 +14,7 @@
 			</rect>
 		</property>
 		<property name="windowTitle">
-			<string>Win Spout Output Settings</string>
+			<string>Spout Output Settings</string>
 		</property>
 		<layout class="QVBoxLayout" name="verticalLayout_main">
 			<item>
