@@ -135,11 +135,11 @@ static void win_spout_source_init(void *data, bool forced = false)
 		}
 	}
 
-	info("Getting info for sender %s", context->senderName);
+	debug("Getting info for sender %s", context->senderName);
 	if (!win_spout_source_store_sender_info(context)) {
 		warn("Named %s sender not found", context->senderName);
 	} else {
-		info("Sender %s is of dimensions %d x %d", context->senderName, context->width, context->height);
+		debug("Sender %s is of dimensions %d x %d", context->senderName, context->width, context->height);
 	};
 
 	obs_enter_graphics();
