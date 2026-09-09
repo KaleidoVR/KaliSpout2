@@ -463,7 +463,7 @@ static void spout_ensure_kaleidovr_menu_action(bool create_if_missing)
 	// (e.g. App Autostarter from Kaleido Launcher). If our action was created
 	// earlier under an empty duplicate menu, move it.
 	if (spout_menu_action) {
-		if (spout_menu_action->parentWidget() != menu) {
+		if (qobject_cast<QMenu *>(spout_menu_action->parent()) != menu) {
 			menu->addAction(spout_menu_action);
 		}
 		spout_remove_empty_kaleidovr_menus(main_window, menu);
@@ -473,8 +473,8 @@ static void spout_ensure_kaleidovr_menu_action(bool create_if_missing)
 	for (QAction *action : menu->actions()) {
 		if (spout_strip_mnemonics(action->text()).compare(label_plain, Qt::CaseInsensitive) == 0) {
 			spout_menu_action = action;
-			QObject::connect(spout_menu_action, &QAction::triggered, spout_open_settings_dialog,
-					 Qt::UniqueConnection);
+			QObject::connect(spout_menu_action, &QAction::triggered, main_window,
+					 [](bool) { spout_open_settings_dialog(); }, Qt::UniqueConnection);
 			spout_remove_empty_kaleidovr_menus(main_window, menu);
 			return;
 		}
@@ -482,7 +482,8 @@ static void spout_ensure_kaleidovr_menu_action(bool create_if_missing)
 
 	spout_menu_action = menu->addAction(label);
 	spout_menu_action->setMenuRole(QAction::NoRole);
-	QObject::connect(spout_menu_action, &QAction::triggered, spout_open_settings_dialog);
+	QObject::connect(spout_menu_action, &QAction::triggered, main_window,
+			 [](bool) { spout_open_settings_dialog(); });
 	spout_remove_empty_kaleidovr_menus(main_window, menu);
 }
 
