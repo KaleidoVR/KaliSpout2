@@ -15,45 +15,86 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QHBoxLayout>
+#include <QGridLayout>
 #include <QHeaderView>
 #include <QLineEdit>
 #include <QShowEvent>
 #include <QSizePolicy>
+#include <QVBoxLayout>
 
 namespace {
 
-constexpr int kOutputRowHeight = 36;
-constexpr int kCellEditorMinHeight = 28;
+constexpr int kOutputRowHeight = 42;
+constexpr int kCellEditorHeight = 32;
+constexpr int kCellEditorMargin = 4;
 
-void style_row_editors(QComboBox *combo, QLineEdit *nameEdit)
+QWidget *wrap_cell_editor(QWidget *editor)
 {
-	if (combo) {
-		combo->setMinimumHeight(kCellEditorMinHeight);
-		combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+	auto *container = new QWidget();
+	auto *layout = new QVBoxLayout(container);
+	layout->setContentsMargins(kCellEditorMargin, kCellEditorMargin, kCellEditorMargin, kCellEditorMargin);
+	layout->setSpacing(0);
+	editor->setMinimumHeight(kCellEditorHeight);
+	editor->setMaximumHeight(kCellEditorHeight);
+	editor->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+	layout->addWidget(editor, 0, Qt::AlignVCenter);
+	container->setMinimumHeight(kOutputRowHeight);
+	return container;
+}
+
+void style_canvas_combo(QComboBox *combo)
+{
+	if (!combo) {
+		return;
 	}
-	if (nameEdit) {
-		nameEdit->setMinimumHeight(kCellEditorMinHeight);
-		nameEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+	// OBS themes often squash bare QComboBox widgets in table cells; force a
+	// readable height that matches the Spout Sender line edit.
+	combo->setStyleSheet(QStringLiteral("QComboBox {"
+					    "  min-height: %1px;"
+					    "  max-height: %1px;"
+					    "  padding-top: 4px;"
+					    "  padding-bottom: 4px;"
+					    "  padding-left: 6px;"
+					    "  padding-right: 6px;"
+					    "}"
+					    "QComboBox::drop-down {"
+					    "  width: 20px;"
+					    "  subcontrol-origin: padding;"
+					    "  subcontrol-position: center right;"
+					    "}")
+				     .arg(kCellEditorHeight));
+	combo->setFixedHeight(kCellEditorHeight);
+}
+
+void style_sender_edit(QLineEdit *nameEdit)
+{
+	if (!nameEdit) {
+		return;
 	}
+	nameEdit->setFixedHeight(kCellEditorHeight);
 }
 
 QWidget *make_centered_autostart_cell(QCheckBox *autoBox)
 {
 	auto *container = new QWidget();
-	auto *layout = new QHBoxLayout(container);
+	auto *layout = new QGridLayout(container);
 	layout->setContentsMargins(0, 0, 0, 0);
 	layout->setSpacing(0);
-	layout->addStretch();
-	layout->addWidget(autoBox, 0, Qt::AlignCenter);
-	layout->addStretch();
+	autoBox->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+	layout->addWidget(autoBox, 0, 0, Qt::AlignCenter);
 	container->setMinimumHeight(kOutputRowHeight);
 	return container;
 }
 
-QCheckBox *autostart_checkbox_from_cell(QWidget *cell)
+template<typename T> T *cell_child(QWidget *cell)
 {
-	return cell ? cell->findChild<QCheckBox *>() : nullptr;
+	if (!cell) {
+		return nullptr;
+	}
+	if (auto *direct = qobject_cast<T *>(cell)) {
+		return direct;
+	}
+	return cell->findChild<T *>();
 }
 
 } // namespace
@@ -72,10 +113,10 @@ win_spout_output_settings::win_spout_output_settings(QWidget *parent)
 	ui->tableWidget_outputs->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
 	ui->tableWidget_outputs->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
 	ui->tableWidget_outputs->verticalHeader()->setVisible(false);
+	ui->tableWidget_outputs->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
 	ui->tableWidget_outputs->verticalHeader()->setDefaultSectionSize(kOutputRowHeight);
 	ui->tableWidget_outputs->verticalHeader()->setMinimumSectionSize(kOutputRowHeight);
-	ui->tableWidget_outputs->setStyleSheet(
-		QStringLiteral("QTableWidget::item { padding-top: 4px; padding-bottom: 4px; }"));
+	ui->tableWidget_outputs->setWordWrap(false);
 	if (auto *autoHeader = ui->tableWidget_outputs->horizontalHeaderItem(2)) {
 		autoHeader->setToolTip(QString::fromUtf8(obs_module_text("autostarttip")));
 	}
@@ -148,12 +189,13 @@ void win_spout_output_settings::load_table()
 		populate_canvas_combo(combo, conf.canvasUuid, conf.canvasName);
 		connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
 			&win_spout_output_settings::on_table_changed);
-		ui->tableWidget_outputs->setCellWidget(row, 0, combo);
+		style_canvas_combo(combo);
+		ui->tableWidget_outputs->setCellWidget(row, 0, wrap_cell_editor(combo));
 
 		auto *nameEdit = new QLineEdit(conf.spoutName);
 		connect(nameEdit, &QLineEdit::textChanged, this, &win_spout_output_settings::on_table_changed);
-		ui->tableWidget_outputs->setCellWidget(row, 1, nameEdit);
-		style_row_editors(combo, nameEdit);
+		style_sender_edit(nameEdit);
+		ui->tableWidget_outputs->setCellWidget(row, 1, wrap_cell_editor(nameEdit));
 
 		auto *autoBox = new QCheckBox();
 		autoBox->setToolTip(QString::fromUtf8(obs_module_text("autostarttip")));
@@ -169,7 +211,7 @@ void win_spout_output_settings::load_table()
 
 void win_spout_output_settings::row_canvas(int row, QString &uuid, QString &name)
 {
-	auto *combo = qobject_cast<QComboBox *>(ui->tableWidget_outputs->cellWidget(row, 0));
+	auto *combo = cell_child<QComboBox>(ui->tableWidget_outputs->cellWidget(row, 0));
 	if (!combo) {
 		uuid.clear();
 		name.clear();
@@ -181,13 +223,13 @@ void win_spout_output_settings::row_canvas(int row, QString &uuid, QString &name
 
 QString win_spout_output_settings::row_sender(int row)
 {
-	auto *edit = qobject_cast<QLineEdit *>(ui->tableWidget_outputs->cellWidget(row, 1));
+	auto *edit = cell_child<QLineEdit>(ui->tableWidget_outputs->cellWidget(row, 1));
 	return edit ? edit->text() : QString();
 }
 
 bool win_spout_output_settings::row_autostart(int row)
 {
-	auto *box = autostart_checkbox_from_cell(ui->tableWidget_outputs->cellWidget(row, 2));
+	auto *box = cell_child<QCheckBox>(ui->tableWidget_outputs->cellWidget(row, 2));
 	return box && box->isChecked();
 }
 
@@ -218,7 +260,7 @@ void win_spout_output_settings::refresh_canvases()
 		QString uuid;
 		QString name;
 		row_canvas(row, uuid, name);
-		auto *combo = qobject_cast<QComboBox *>(ui->tableWidget_outputs->cellWidget(row, 0));
+		auto *combo = cell_child<QComboBox>(ui->tableWidget_outputs->cellWidget(row, 0));
 		if (combo) {
 			combo->blockSignals(true);
 			populate_canvas_combo(combo, uuid, name);
@@ -277,7 +319,8 @@ void win_spout_output_settings::on_add_output()
 	populate_canvas_combo(combo, QString(), QString());
 	connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
 		&win_spout_output_settings::on_table_changed);
-	ui->tableWidget_outputs->setCellWidget(row, 0, combo);
+	style_canvas_combo(combo);
+	ui->tableWidget_outputs->setCellWidget(row, 0, wrap_cell_editor(combo));
 
 	QString sender = "OBS_Spout";
 	if (row > 0) {
@@ -285,8 +328,8 @@ void win_spout_output_settings::on_add_output()
 	}
 	auto *nameEdit = new QLineEdit(sender);
 	connect(nameEdit, &QLineEdit::textChanged, this, &win_spout_output_settings::on_table_changed);
-	ui->tableWidget_outputs->setCellWidget(row, 1, nameEdit);
-	style_row_editors(combo, nameEdit);
+	style_sender_edit(nameEdit);
+	ui->tableWidget_outputs->setCellWidget(row, 1, wrap_cell_editor(nameEdit));
 
 	auto *autoBox = new QCheckBox();
 	autoBox->setToolTip(QString::fromUtf8(obs_module_text("autostarttip")));
