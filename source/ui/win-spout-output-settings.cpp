@@ -33,8 +33,8 @@ constexpr int kCanvasComboMaxWidth = 200;
 
 void style_matched_editors(QComboBox *combo, QLineEdit *nameEdit)
 {
-	// OBS themes often squash bare QComboBox widgets. Raise min-height only —
-	// do not set padding/max-height/fixed size (those clip inside table cells).
+	// OBS themes often squash bare QComboBox widgets. Keep a compact fixed
+	// height that matches the Spout Sender line edit without extra padding.
 	if (combo) {
 		combo->setStyleSheet(QStringLiteral("QComboBox { min-height: %1px; }").arg(kEditorMinHeight));
 		combo->setMinimumHeight(kEditorMinHeight);
