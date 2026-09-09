@@ -4,7 +4,7 @@ RequestExecutionLevel admin
 Unicode True
 
 ; Define your application name
-!define APPNAME "Spout 2 OBS Plugin"
+!define APPNAME "Spout 2 OBS Plugin (KaleidoVR)"
 !define APPVERSION "DebugVersion"
 !define RELEASEDIR "release\Release"
 !define APPNAMEANDVERSION "Spout 2 OBS Plugin ${APPVERSION}"
@@ -66,8 +66,8 @@ Section -FinishSection
 	WriteRegStr HKLM "Software\${APPNAME}" "InstallDir" "$INSTDIR"
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayName" "${APPNAME}"
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "UninstallString" "$INSTDIR\uninstall-spout2-plugin.exe"
-	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "Publisher" "OBS Spout2 Plugin"
-	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "HelpLink" "https://github.com/Off-World-Live/obs-spout2-source-plugin"
+	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "Publisher" "KaleidoVR"
+	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "HelpLink" "https://github.com/KaleidoVR/obs-spout2-plugin"
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayVersion" "${APPVERSION}"
 	WriteUninstaller "$INSTDIR\uninstall-spout2-plugin.exe"
 
