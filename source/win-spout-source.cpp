@@ -284,8 +284,10 @@ static void win_spout_source_render(void *data, gs_effect_t *effect)
 		win_spout_source_init(data, true);
 	}
 
+	// Do not force-init every render: with multiple canvases video_render runs
+	// once per mix and was re-opening shared textures / spamming the log (#89).
 	if (!context->initialized) {
-		win_spout_source_init(data, true);
+		win_spout_source_init(data, false);
 		if (!context->initialized) {
 			if (context->render_status != -1) {
 				debug("uninit'd");
@@ -427,10 +429,10 @@ static void win_spout_source_tick(void *data, float seconds)
 		if (context->tick_status != -2) {
 			context->tick_status = -2;
 		}
-		// Rate-limit recovery attempts via init()'s tick_speed_limit.
-		context->pending_reset = true;
+		// Poll with tick_speed_limit instead of forcing a reset every frame.
+		win_spout_source_init(data, false);
 	}
-	if (context->tick_status != 0) {
+	if (context->initialized && context->tick_status != 0) {
 		context->tick_status = 0;
 	}
 }
