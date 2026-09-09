@@ -15,6 +15,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QFontMetrics>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -24,31 +25,58 @@
 
 namespace {
 
-constexpr int kOutputRowHeight = 40;
-constexpr int kEditorHeight = 32;
-constexpr int kEditorVMargin = 3;
+constexpr int kEditorMinHeight = 40;
+constexpr int kEditorVPad = 5;
+constexpr int kEditorHPad = 8;
+constexpr int kEditorVMargin = 4;
 constexpr int kAutoStartColumnWidth = 96;
 constexpr int kStatusColumnWidth = 88;
 constexpr int kCanvasComboMinContents = 10;
 constexpr int kCanvasComboMaxWidth = 200;
-constexpr int kEditorHPad = 8;
+
+int matched_editor_height(QWidget *widget)
+{
+	if (!widget) {
+		return kEditorMinHeight;
+	}
+	widget->ensurePolished();
+	const int textH = QFontMetrics(widget->font()).height();
+	// Font height + vertical padding + border/chrome so glyphs are not clipped.
+	return qMax(kEditorMinHeight, textH + (kEditorVPad * 2) + 10);
+}
+
+int matched_row_height(int editorHeight)
+{
+	return editorHeight + (kEditorVMargin * 2) + 2;
+}
 
 void style_matched_editors(QComboBox *combo, QLineEdit *nameEdit)
 {
-	// Keep row height and editor height in lockstep so text is readable without
-	// overflowing the cell. Horizontal padding only — no stylesheet min-height.
-	const QString hpad = QStringLiteral("padding-left: %1px; padding-right: 6px;").arg(kEditorHPad);
+	QWidget *probe = combo ? static_cast<QWidget *>(combo) : static_cast<QWidget *>(nameEdit);
+	const int editorH = matched_editor_height(probe);
+	const QString pad = QStringLiteral("padding-left: %1px; padding-right: 6px; "
+					   "padding-top: %2px; padding-bottom: %2px;")
+				    .arg(kEditorHPad)
+				    .arg(kEditorVPad);
+
 	if (combo) {
-		combo->setStyleSheet(QStringLiteral("QComboBox { %1 }").arg(hpad));
-		combo->setFixedHeight(kEditorHeight);
+		combo->setStyleSheet(QStringLiteral("QComboBox { %1 }"
+						    "QComboBox::drop-down {"
+						    "  subcontrol-origin: padding;"
+						    "  subcontrol-position: center right;"
+						    "  width: 22px;"
+						    "  border: none;"
+						    "}")
+					     .arg(pad));
+		combo->setFixedHeight(editorH);
 		combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
 		combo->setMinimumContentsLength(kCanvasComboMinContents);
 		combo->setMaximumWidth(kCanvasComboMaxWidth);
 		combo->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 	}
 	if (nameEdit) {
-		nameEdit->setStyleSheet(QStringLiteral("QLineEdit { %1 }").arg(hpad));
-		nameEdit->setFixedHeight(kEditorHeight);
+		nameEdit->setStyleSheet(QStringLiteral("QLineEdit { %1 }").arg(pad));
+		nameEdit->setFixedHeight(editorH);
 		nameEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 	}
 }
@@ -58,7 +86,6 @@ QWidget *wrap_editor(QWidget *editor, bool fill_width)
 	auto *container = new QWidget();
 	container->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	auto *layout = new QHBoxLayout(container);
-	// Small vertical margin so the control sits inside the row grid lines.
 	layout->setContentsMargins(2, kEditorVMargin, 2, kEditorVMargin);
 	layout->setSpacing(0);
 	if (fill_width) {
@@ -126,8 +153,9 @@ win_spout_output_settings::win_spout_output_settings(QWidget *parent)
 	ui->tableWidget_outputs->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	ui->tableWidget_outputs->verticalHeader()->setVisible(false);
 	ui->tableWidget_outputs->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
-	ui->tableWidget_outputs->verticalHeader()->setDefaultSectionSize(kOutputRowHeight);
-	ui->tableWidget_outputs->verticalHeader()->setMinimumSectionSize(kOutputRowHeight);
+	const int defaultRowH = matched_row_height(matched_editor_height(this));
+	ui->tableWidget_outputs->verticalHeader()->setDefaultSectionSize(defaultRowH);
+	ui->tableWidget_outputs->verticalHeader()->setMinimumSectionSize(defaultRowH);
 	ui->tableWidget_outputs->setWordWrap(false);
 	ui->tableWidget_outputs->setMinimumHeight(100);
 	if (auto *canvasHeader = ui->tableWidget_outputs->horizontalHeaderItem(0)) {
@@ -224,7 +252,7 @@ void win_spout_output_settings::load_table()
 		autoBox->setChecked(conf.autoStart);
 		connect(autoBox, &QCheckBox::toggled, this, &win_spout_output_settings::handle_table_changed);
 		ui->tableWidget_outputs->setCellWidget(row, 2, make_centered_autostart_cell(autoBox));
-		ui->tableWidget_outputs->setRowHeight(row, kOutputRowHeight);
+		ui->tableWidget_outputs->setRowHeight(row, matched_row_height(combo->height()));
 
 		ui->tableWidget_outputs->setItem(row, 3, new QTableWidgetItem());
 		update_row_running_state(row);
@@ -358,7 +386,7 @@ void win_spout_output_settings::handle_add_output()
 	autoBox->setChecked(false);
 	connect(autoBox, &QCheckBox::toggled, this, &win_spout_output_settings::handle_table_changed);
 	ui->tableWidget_outputs->setCellWidget(row, 2, make_centered_autostart_cell(autoBox));
-	ui->tableWidget_outputs->setRowHeight(row, kOutputRowHeight);
+	ui->tableWidget_outputs->setRowHeight(row, matched_row_height(combo->height()));
 
 	ui->tableWidget_outputs->setItem(row, 3, new QTableWidgetItem());
 	update_row_running_state(row);
