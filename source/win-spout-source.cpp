@@ -8,6 +8,7 @@
  */
 
 #include <obs-module.h>
+#include <util/threading.h>
 #include "win-spout.h"
 
 #include "SpoutLibrary.h"
@@ -43,7 +44,10 @@ struct spout_source {
 	int spout_status;
 	int render_status;
 	int tick_status;
+	int sender_info_fail_count;
+	bool pending_reset;
 	SPOUTHANDLE spout_receiver_ptr;
+	pthread_mutex_t mutex;
 };
 
 /**
@@ -99,13 +103,8 @@ static void win_spout_source_init(void *data, bool forced = false)
 
 	if (context->useFirstSender) {
 		if (context->spout_receiver_ptr->GetSender(0, context->senderName)) {
-			if (!context->spout_receiver_ptr->SetActiveSender(context->senderName)) {
-				if (context->spout_status != -4) {
-					info("WoW , i can't set active sender as %s", context->senderName);
-					context->spout_status = -4;
-				}
-				return;
-			}
+			// Do not call SetActiveSender: that mutates global Spout state and
+			// races when the same source is drawn on additional OBS canvases.
 		} else {
 			if (context->spout_status != -3) {
 				info("Strange , there is a sender without name ?");
@@ -144,10 +143,14 @@ static void win_spout_source_init(void *data, bool forced = false)
 	};
 
 	obs_enter_graphics();
-	gs_texture_destroy(context->texture);
+	gs_texture_t *old_tex = context->texture;
 	context->texture = gs_texture_open_shared((uint32_t)(uintptr_t)context->dxHandle);
+	if (old_tex) {
+		gs_texture_destroy(old_tex);
+	}
 	obs_leave_graphics();
 
+	context->sender_info_fail_count = 0;
 	context->initialized = true;
 }
 
@@ -155,11 +158,12 @@ static void win_spout_source_deinit(void *data)
 {
 	struct spout_source *context = (spout_source *)data;
 	context->initialized = false;
-	if (context->texture) {
+	gs_texture_t *tex = context->texture;
+	context->texture = NULL;
+	if (tex) {
 		obs_enter_graphics();
-		gs_texture_destroy(context->texture);
+		gs_texture_destroy(tex);
 		obs_leave_graphics();
-		context->texture = NULL;
 	}
 }
 
@@ -184,8 +188,7 @@ static void win_spout_source_update(void *data, obs_data_t *settings)
 	context->composite_mode = compositeMode;
 
 	if (context->initialized) {
-		win_spout_source_deinit(data);
-		win_spout_source_init(data);
+		context->pending_reset = true;
 	}
 }
 
@@ -200,15 +203,19 @@ static const char *win_spout_source_get_name(void *unused)
 static void *win_spout_source_create(obs_data_t *settings, obs_source_t *source)
 {
 	struct spout_source *context = (spout_source *)bzalloc(sizeof(spout_source));
-	info("initialising spout source");
 	context->spout_receiver_ptr = GetSpout();
 	context->source = source;
+	// Name may still be unset during create; keep this at debug to avoid [(null)] info spam (#89).
+	debug("initialising spout source");
 	context->useFirstSender = true;
 	context->initialized = false;
 	context->tick_speed_limit = 0;
 	context->texture = NULL;
 	context->dxHandle = NULL;
-	context->initialized = false;
+	context->sender_info_fail_count = 0;
+	context->pending_reset = false;
+	pthread_mutex_init_value(&context->mutex);
+	pthread_mutex_init(&context->mutex, NULL);
 
 	// set the initial size as 100x100 until we
 	// have the actual dimensions from SPOUT
@@ -229,6 +236,7 @@ static void win_spout_source_destroy(void *data)
 		context->spout_receiver_ptr = nullptr;
 	}
 
+	pthread_mutex_destroy(&context->mutex);
 	bfree(context);
 }
 
@@ -245,6 +253,12 @@ static void win_spout_source_show(void *data)
 
 static void win_spout_source_hide(void *data)
 {
+	struct spout_source *context = (spout_source *)data;
+	// Additional canvases can hide the source on one mix while it is still
+	// shown on another. Only tear down GPU resources when nothing is showing.
+	if (context->source && obs_source_showing(context->source)) {
+		return;
+	}
 	win_spout_source_deinit(data);
 }
 
@@ -264,17 +278,31 @@ static void win_spout_source_render(void *data, gs_effect_t *effect)
 {
 	struct spout_source *context = (spout_source *)data;
 
-	// tried to initialise again
-	// but failed, so we exit
-	if (!context->initialized) {
-		if (context->render_status != -1) {
-			debug("uninit'd");
-			context->render_status = -1;
-		}
-		return;
+	if (context->pending_reset) {
+		context->pending_reset = false;
+		win_spout_source_deinit(data);
+		win_spout_source_init(data, true);
 	}
 
-	if (!context->texture) {
+	// Do not force-init every render: with multiple canvases video_render runs
+	// once per mix and was re-opening shared textures / spamming the log (#89).
+	if (!context->initialized) {
+		win_spout_source_init(data, false);
+		if (!context->initialized) {
+			if (context->render_status != -1) {
+				debug("uninit'd");
+				context->render_status = -1;
+			}
+			return;
+		}
+	}
+
+	pthread_mutex_lock(&context->mutex);
+	gs_texture_t *texture = context->texture;
+	const ULONGLONG composite_mode = context->composite_mode;
+	pthread_mutex_unlock(&context->mutex);
+
+	if (!texture) {
 		if (context->render_status != -2) {
 			debug("no texture");
 			context->render_status = -2;
@@ -287,7 +315,7 @@ static void win_spout_source_render(void *data, gs_effect_t *effect)
 		context->render_status = 0;
 	}
 
-	switch (context->composite_mode) {
+	switch (composite_mode) {
 	case COMPOSITE_MODE_OPAQUE:
 		effect = obs_get_base_effect(OBS_EFFECT_OPAQUE);
 		break;
@@ -310,12 +338,30 @@ static void win_spout_source_render(void *data, gs_effect_t *effect)
 	}
 
 	while (gs_effect_loop(effect, "Draw")) {
-		obs_source_draw(context->texture, 0, 0, 0, 0, false);
+		obs_source_draw(texture, 0, 0, 0, 0, false);
 	}
 
-	if (context->composite_mode == COMPOSITE_MODE_PREMULTIPLIED) {
+	if (composite_mode == COMPOSITE_MODE_PREMULTIPLIED) {
 		gs_blend_state_pop();
 	}
+}
+
+static bool win_spout_sender_exists(spout_source *context)
+{
+	if (!context->spout_receiver_ptr) {
+		return false;
+	}
+	int totalSenders = context->spout_receiver_ptr->GetSenderCount();
+	char senderName[256];
+	for (int index = 0; index < totalSenders; index++) {
+		if (!context->spout_receiver_ptr->GetSender(index, senderName)) {
+			continue;
+		}
+		if (strcmp(senderName, context->senderName) == 0) {
+			return true;
+		}
+	}
+	return false;
 }
 
 /**
@@ -326,15 +372,33 @@ static void win_spout_source_render(void *data, gs_effect_t *effect)
  */
 static bool win_spout_sender_has_changed(spout_source *context)
 {
+	if (!win_spout_sender_exists(context)) {
+		if (!context->initialized) {
+			return false;
+		}
+		// Extra canvases can briefly report no senders while the shared
+		// texture is still valid. Require several misses before reset (#89).
+		context->sender_info_fail_count++;
+		if (context->sender_info_fail_count < 8) {
+			return false;
+		}
+		return true;
+	}
+
 	DWORD oldFormat = context->dxFormat;
 	auto oldWidth = context->width;
 	auto oldHeight = context->height;
 
 	if (!win_spout_source_store_sender_info(context)) {
-		// assume that if it fails, it has changed
-		// ie sender no longer exists
+		// GetSenderInfo can fail transiently when extra canvases are rendering
+		// the same shared texture. Do not tear down on a single miss.
+		context->sender_info_fail_count++;
+		if (context->sender_info_fail_count < 8) {
+			return false;
+		}
 		return true;
 	}
+	context->sender_info_fail_count = 0;
 	if (context->width != oldWidth || context->height != oldHeight || oldFormat != context->dxFormat) {
 		return true;
 	}
@@ -347,23 +411,28 @@ static void win_spout_source_tick(void *data, float seconds)
 
 	struct spout_source *context = (spout_source *)data;
 
-	if (win_spout_sender_has_changed(context)) {
+	pthread_mutex_lock(&context->mutex);
+	bool changed = win_spout_sender_has_changed(context);
+	pthread_mutex_unlock(&context->mutex);
+
+	if (changed) {
+		// Demote to debug: with multiple canvases this used to flood the log
+		// even when the sender was only briefly unreachable (#89).
 		if (context->tick_status != -1) {
-			info("Sender %s has changed / gone away. Resetting ", context->senderName);
+			debug("Sender %s has changed / gone away. Resetting", context->senderName);
 			context->tick_status = -1;
 		}
-		context->initialized = false;
-		win_spout_source_deinit(data);
-		win_spout_source_init(data);
+		context->pending_reset = true;
 		return;
 	}
 	if (!context->initialized) {
 		if (context->tick_status != -2) {
 			context->tick_status = -2;
 		}
-		win_spout_source_init(data);
+		// Poll with tick_speed_limit instead of forcing a reset every frame.
+		win_spout_source_init(data, false);
 	}
-	if (context->tick_status != 0) {
+	if (context->initialized && context->tick_status != 0) {
 		context->tick_status = 0;
 	}
 }

@@ -264,6 +264,9 @@ void win_spout_filter_update(void *data, obs_data_t *settings)
 
 	pthread_mutex_unlock(&context->mutex);
 
+	// OBS has no per-canvas render callback. video_render still runs on every
+	// canvas that draws the filtered source; this callback then sends once per
+	// main mix frame using GPU textures (no global BGRA conversion).
 	obs_add_main_render_callback(win_spout_offscreen_render, context);
 }
 

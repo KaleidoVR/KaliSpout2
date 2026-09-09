@@ -1,12 +1,12 @@
 {
     "dependencies": {
         "obs-studio": {
-            "version": "32.1.2",
+            "version": "32.2.2",
             "baseUrl": "https://github.com/obsproject/obs-studio/archive/refs/tags",
             "label": "OBS sources",
             "hashes": {
                 "macos": "",
-                "windows-x64": "21cba22292985cf0da967d5c618999b40eaa32b73d2ab8b06154b5ea1b3d3798"
+                "windows-x64": "f15f001f1fa526405318835f44f9910046502f496ebc3a30d5296a5018b831aa"
             }
         },
         "prebuilt": {
@@ -38,7 +38,7 @@
     },
     "name": "win-spout",
     "displayName": "Spout2 Plugin for OBS",
-    "version": "1.11.0",
+    "version": "1.12.0",
     "author": "Campbell Morgan",
     "website": "https://github.com/Off-World-Live/obs-spout2-plugin",
     "email": "support@offworld.live"

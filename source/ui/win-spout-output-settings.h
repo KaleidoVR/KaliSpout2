@@ -1,16 +1,8 @@
-/**
- * Copyright Off World Live Ltd (https://offworld.live), 2019-2021
- *
- * and licenced under the GPL v2 (https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
- *
- * Many thanks to authors of https://github.com/baffler/OBS-OpenVR-Input-Plugin which
- * was used as guidance to working with the OBS Studio APIs
- */
-
 #ifndef WINSPOUTOUTSETTINGS_H
 #define WINSPOUTOUTSETTINGS_H
 
 #include <QDialog>
+#include <QShowEvent>
 #include "ui_win-spout-output-settings.h"
 
 class win_spout_output_settings : public QDialog {
@@ -19,15 +11,28 @@ class win_spout_output_settings : public QDialog {
 public:
 	explicit win_spout_output_settings(QWidget *parent = 0);
 	~win_spout_output_settings();
-	void set_started_button_state(bool started);
+	void refresh_canvases();
 
 private Q_SLOTS:
-	void on_start();
-	void on_stop();
+	void on_start_selected();
+	void on_stop_selected();
+	void on_start_all();
+	void on_stop_all();
+	void on_add_output();
+	void on_remove_output();
+	void on_table_changed();
 
 private:
 	Ui::win_spout_output_settings *ui;
 	void save_settings();
+	void load_table();
+	void populate_canvas_combo(class QComboBox *combo, const QString &uuid, const QString &name);
+	void row_canvas(int row, QString &uuid, QString &name);
+	QString row_sender(int row);
+	bool row_autostart(int row);
+	void update_row_running_state(int row);
+	void update_all_running_states();
+	void showEvent(QShowEvent *event) override;
 };
 
 #endif // WINSPOUTOUTSETTINGS_H

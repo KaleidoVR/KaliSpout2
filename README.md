@@ -14,7 +14,15 @@ inefficient and limited by your current screen resolution.
 
 Previously, there was no way of outputting Spout video textures from OBS. 
 
-This plugin implements the SPOUT2 SDK, creates an OBS Source from the SPOUT shared texture and a Spout output which sends the content of the OBS canvas to Spout.
+This plugin implements the SPOUT2 SDK, creates an OBS Source from the SPOUT shared texture and a Spout output which sends the content of an OBS canvas to Spout.
+
+## OBS 32.2+ canvases (Aitum Vertical / Stream Suite / Multistream)
+
+Tools → Spout Output Settings lists every frontend canvas and can start a separate Spout sender per canvas. Each output is bound with `obs_output_set_media` to that canvas's video mix so BGRA conversion does not take over the global mix or black out extra canvases.
+
+Auto-start is opt-in per canvas, defaults off, and is delayed until `OBS_FRONTEND_EVENT_FINISHED_LOADING` (queued on the UI thread) so canvas plugins can finish `obs_canvas_reset_video` first. Upgrading clears stale Auto-start flags that previously survived OBS reinstalls while the Spout user config remained (see Off-World-Live issues #89 / #92).
+
+Spout Capture sources no longer treat extra-canvas redraws as a sender reset, keep GPU textures until the source is hidden on every canvas, and rate-limit transient "sender gone" resets that previously flooded the OBS log.
 
 Please see installation and usage guide [here](http://docs.offworld.live/#/obs-spout-plugin/README?id=spout-plugin-for-obs-studio)
 
