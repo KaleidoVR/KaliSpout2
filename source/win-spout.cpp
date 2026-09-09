@@ -25,7 +25,7 @@
 #include "win-spout-config.h"
 
 OBS_DECLARE_MODULE()
-OBS_MODULE_AUTHOR("Off World Live / KaleidoVR")
+OBS_MODULE_AUTHOR("KaleidoVR")
 OBS_MODULE_USE_DEFAULT_LOCALE("win-spout", "en-US")
 
 extern struct obs_source_info create_spout_source_info();
@@ -566,9 +566,9 @@ bool obs_module_load(void)
 	spout_filter_info = create_spout_filter_info();
 	obs_register_source(&spout_filter_info);
 
-	blog(LOG_INFO, "win-spout loaded (OBS canvas-aware Spout output, KaleidoVR menu)!");
-	blog(LOG_INFO, "win-spout loaded (Version %s)", PLUGIN_VERSION);
-	blog(LOG_INFO, "win-spout loaded (%s)", PLUGIN_REPO_URL);
+	blog(LOG_INFO, "KaliSpout2 loaded (OBS canvas-aware Spout output, KaleidoVR menu)!");
+	blog(LOG_INFO, "KaliSpout2 loaded (Version %s)", PLUGIN_VERSION);
+	blog(LOG_INFO, "KaliSpout2 loaded (%s)", PLUGIN_REPO_URL);
 
 	return true;
 }
@@ -580,15 +580,15 @@ void obs_module_unload()
 		delete spout_output_settings;
 		spout_output_settings = nullptr;
 	}
-	blog(LOG_INFO, "win-spout unloaded!");
+	blog(LOG_INFO, "KaliSpout2 unloaded!");
 }
 
 const char *obs_module_name()
 {
-	return "win-spout";
+	return "KaliSpout2";
 }
 
 const char *obs_module_description()
 {
-	return "Spout input/output for OBS Studio";
+	return "KaliSpout2 — Spout2 input/output for OBS Studio (KaleidoVR fork)";
 }

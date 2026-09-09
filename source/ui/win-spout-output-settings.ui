@@ -14,7 +14,7 @@
 			</rect>
 		</property>
 		<property name="windowTitle">
-			<string>Spout Output Settings</string>
+			<string>KaliSpout2 Output Settings</string>
 		</property>
 		<layout class="QVBoxLayout" name="verticalLayout_main">
 			<item>
