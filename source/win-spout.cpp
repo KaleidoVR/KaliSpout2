@@ -418,6 +418,32 @@ static void spout_open_settings_dialog()
 	}
 }
 
+static void spout_remove_empty_kaleidovr_menus(QMainWindow *main_window, QMenu *keep)
+{
+	if (!main_window || !main_window->menuBar()) {
+		return;
+	}
+
+	QList<QAction *> to_remove;
+	for (QAction *action : main_window->menuBar()->actions()) {
+		QMenu *menu = action->menu();
+		if (!menu || menu == keep) {
+			continue;
+		}
+		if (spout_strip_mnemonics(menu->title()).compare(QString::fromUtf8(KALEIDOVR_MENU_TITLE),
+								 Qt::CaseInsensitive) != 0) {
+			continue;
+		}
+		if (menu->actions().isEmpty()) {
+			to_remove.append(action);
+		}
+	}
+	for (QAction *action : to_remove) {
+		main_window->menuBar()->removeAction(action);
+		action->deleteLater();
+	}
+}
+
 static void spout_ensure_kaleidovr_menu_action(bool create_if_missing)
 {
 	QMainWindow *main_window = (QMainWindow *)obs_frontend_get_main_window();
