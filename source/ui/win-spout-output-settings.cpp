@@ -24,30 +24,47 @@
 
 namespace {
 
-constexpr int kOutputRowHeight = 26;
-constexpr int kEditorMinHeight = 22;
+constexpr int kOutputRowHeight = 30;
+constexpr int kEditorMinHeight = 26;
 constexpr int kAutoStartColumnWidth = 96;
 constexpr int kStatusColumnWidth = 88;
 constexpr int kCanvasComboMinContents = 10;
 constexpr int kCanvasComboMaxWidth = 200;
+constexpr int kEditorHPad = 8;
 
 void style_matched_editors(QComboBox *combo, QLineEdit *nameEdit)
 {
-	// OBS themes often squash bare QComboBox widgets. Keep a compact fixed
-	// height that matches the Spout Sender line edit without extra padding.
+	// Compact but readable: enough height for OBS theme fonts, left padding so
+	// text is not flush against the control border. Avoid max-height + padding
+	// fights that clip glyphs.
 	if (combo) {
-		combo->setStyleSheet(QStringLiteral("QComboBox { min-height: %1px; }").arg(kEditorMinHeight));
+		combo->setStyleSheet(QStringLiteral("QComboBox {"
+						    "  min-height: %1px;"
+						    "  padding-left: %2px;"
+						    "  padding-right: 6px;"
+						    "  padding-top: 1px;"
+						    "  padding-bottom: 1px;"
+						    "}")
+					     .arg(kEditorMinHeight)
+					     .arg(kEditorHPad));
 		combo->setMinimumHeight(kEditorMinHeight);
-		combo->setMaximumHeight(kEditorMinHeight);
 		combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
 		combo->setMinimumContentsLength(kCanvasComboMinContents);
 		combo->setMaximumWidth(kCanvasComboMaxWidth);
-		combo->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+		combo->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 	}
 	if (nameEdit) {
+		nameEdit->setStyleSheet(QStringLiteral("QLineEdit {"
+						       "  min-height: %1px;"
+						       "  padding-left: %2px;"
+						       "  padding-right: 6px;"
+						       "  padding-top: 1px;"
+						       "  padding-bottom: 1px;"
+						       "}")
+						.arg(kEditorMinHeight)
+						.arg(kEditorHPad));
 		nameEdit->setMinimumHeight(kEditorMinHeight);
-		nameEdit->setMaximumHeight(kEditorMinHeight);
-		nameEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+		nameEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	}
 }
 
@@ -56,7 +73,7 @@ QWidget *wrap_canvas_combo(QComboBox *combo)
 	auto *container = new QWidget();
 	container->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	auto *layout = new QHBoxLayout(container);
-	layout->setContentsMargins(1, 1, 1, 1);
+	layout->setContentsMargins(2, 2, 2, 2);
 	layout->setSpacing(0);
 	layout->addWidget(combo, 0, Qt::AlignLeft | Qt::AlignVCenter);
 	layout->addStretch(1);
@@ -106,6 +123,13 @@ win_spout_output_settings::win_spout_output_settings(QWidget *parent)
 	header->setSectionResizeMode(2, QHeaderView::Fixed);
 	header->setSectionResizeMode(3, QHeaderView::Fixed);
 	header->setStretchLastSection(false);
+	header->setStyleSheet(QStringLiteral("QHeaderView::section {"
+					     "  padding-left: %1px;"
+					     "  padding-right: 8px;"
+					     "  padding-top: 4px;"
+					     "  padding-bottom: 4px;"
+					     "}")
+				      .arg(kEditorHPad));
 	ui->tableWidget_outputs->setColumnWidth(0, kCanvasComboMaxWidth + 16);
 	ui->tableWidget_outputs->setColumnWidth(2, kAutoStartColumnWidth);
 	ui->tableWidget_outputs->setColumnWidth(3, kStatusColumnWidth);
