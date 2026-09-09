@@ -269,6 +269,7 @@ void spout_output_stop(const char *canvasUuid, const char *canvasName)
 	}
 
 	if (output) {
+		blog(LOG_INFO, "Stopped Spout output for canvas '%s'", canvasName && *canvasName ? canvasName : "Main");
 		obs_output_stop(output);
 		obs_output_release(output);
 	}
@@ -295,6 +296,8 @@ void spout_output_stop_all()
 	for (auto &[key, entry] : snapshot) {
 		UNUSED_PARAMETER(key);
 		if (entry.output) {
+			blog(LOG_INFO, "Stopped Spout output for canvas '%s'",
+			     entry.name.empty() ? "Main" : entry.name.c_str());
 			obs_output_stop(entry.output);
 			obs_output_release(entry.output);
 		}
@@ -349,7 +352,8 @@ void spout_schedule_autostart()
 				autostart_retry_count++;
 				QMainWindow *window = (QMainWindow *)obs_frontend_get_main_window();
 				if (window) {
-					QTimer::singleShot(AUTOSTART_RETRY_MS, window, []() { spout_schedule_autostart(); });
+					QTimer::singleShot(AUTOSTART_RETRY_MS, window,
+							   []() { spout_schedule_autostart(); });
 				}
 			}
 		},
@@ -376,8 +380,8 @@ static QMenu *spout_find_kaleidovr_menu(QMainWindow *main_window, bool create_if
 		if (!menu) {
 			continue;
 		}
-		if (spout_strip_mnemonics(menu->title()).compare(QString::fromUtf8(KALEIDOVR_MENU_TITLE),
-								 Qt::CaseInsensitive) != 0) {
+		if (spout_strip_mnemonics(menu->title())
+			    .compare(QString::fromUtf8(KALEIDOVR_MENU_TITLE), Qt::CaseInsensitive) != 0) {
 			continue;
 		}
 		if (!menu->actions().isEmpty()) {
@@ -430,8 +434,8 @@ static void spout_remove_empty_kaleidovr_menus(QMainWindow *main_window, QMenu *
 		if (!menu || menu == keep) {
 			continue;
 		}
-		if (spout_strip_mnemonics(menu->title()).compare(QString::fromUtf8(KALEIDOVR_MENU_TITLE),
-								 Qt::CaseInsensitive) != 0) {
+		if (spout_strip_mnemonics(menu->title())
+			    .compare(QString::fromUtf8(KALEIDOVR_MENU_TITLE), Qt::CaseInsensitive) != 0) {
 			continue;
 		}
 		if (menu->actions().isEmpty()) {
@@ -473,8 +477,9 @@ static void spout_ensure_kaleidovr_menu_action(bool create_if_missing)
 	for (QAction *action : menu->actions()) {
 		if (spout_strip_mnemonics(action->text()).compare(label_plain, Qt::CaseInsensitive) == 0) {
 			spout_menu_action = action;
-			QObject::connect(spout_menu_action, &QAction::triggered, main_window,
-					 [](bool) { spout_open_settings_dialog(); }, Qt::UniqueConnection);
+			QObject::connect(
+				spout_menu_action, &QAction::triggered, main_window,
+				[](bool) { spout_open_settings_dialog(); }, Qt::UniqueConnection);
 			spout_remove_empty_kaleidovr_menus(main_window, menu);
 			return;
 		}
@@ -498,9 +503,7 @@ static void spout_schedule_kaleidovr_menu_action()
 	// FINISHED_LOADING callback. Defer one event-loop tick so we attach to that
 	// same menu instead of creating a second KaleidoVR entry when Spout's callback
 	// runs first.
-	QTimer::singleShot(0, main_window, []() {
-		spout_ensure_kaleidovr_menu_action(true);
-	});
+	QTimer::singleShot(0, main_window, []() { spout_ensure_kaleidovr_menu_action(true); });
 }
 
 static void spout_obs_event(enum obs_frontend_event event, void *)

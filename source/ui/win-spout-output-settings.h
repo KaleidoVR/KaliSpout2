@@ -14,13 +14,13 @@ public:
 	void refresh_canvases();
 
 private Q_SLOTS:
-	void on_start_selected();
-	void on_stop_selected();
-	void on_start_all();
-	void on_stop_all();
-	void on_add_output();
-	void on_remove_output();
-	void on_table_changed();
+	void handle_start_selected();
+	void handle_stop_selected();
+	void handle_start_all();
+	void handle_stop_all();
+	void handle_add_output();
+	void handle_remove_output();
+	void handle_table_changed();
 
 private:
 	Ui::win_spout_output_settings *ui;

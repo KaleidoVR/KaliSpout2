@@ -24,8 +24,8 @@
 
 namespace {
 
-constexpr int kOutputRowHeight = 36;
-constexpr int kEditorMinHeight = 28;
+constexpr int kOutputRowHeight = 26;
+constexpr int kEditorMinHeight = 22;
 constexpr int kAutoStartColumnWidth = 96;
 constexpr int kStatusColumnWidth = 88;
 constexpr int kCanvasComboMinContents = 10;
@@ -38,23 +38,25 @@ void style_matched_editors(QComboBox *combo, QLineEdit *nameEdit)
 	if (combo) {
 		combo->setStyleSheet(QStringLiteral("QComboBox { min-height: %1px; }").arg(kEditorMinHeight));
 		combo->setMinimumHeight(kEditorMinHeight);
+		combo->setMaximumHeight(kEditorMinHeight);
 		combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
 		combo->setMinimumContentsLength(kCanvasComboMinContents);
 		combo->setMaximumWidth(kCanvasComboMaxWidth);
-		combo->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+		combo->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 	}
 	if (nameEdit) {
 		nameEdit->setMinimumHeight(kEditorMinHeight);
-		nameEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+		nameEdit->setMaximumHeight(kEditorMinHeight);
+		nameEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 	}
 }
 
 QWidget *wrap_canvas_combo(QComboBox *combo)
 {
 	auto *container = new QWidget();
-	container->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+	container->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	auto *layout = new QHBoxLayout(container);
-	layout->setContentsMargins(2, 2, 2, 2);
+	layout->setContentsMargins(1, 1, 1, 1);
 	layout->setSpacing(0);
 	layout->addWidget(combo, 0, Qt::AlignLeft | Qt::AlignVCenter);
 	layout->addStretch(1);
@@ -94,8 +96,8 @@ win_spout_output_settings::win_spout_output_settings(QWidget *parent)
 {
 	this->setAttribute(Qt::WA_DeleteOnClose);
 	ui->setupUi(this);
-	this->setMinimumSize(720, 400);
-	this->resize(720, 420);
+	this->setMinimumSize(720, 360);
+	this->resize(720, 380);
 
 	auto *header = ui->tableWidget_outputs->horizontalHeader();
 	header->setMinimumSectionSize(72);
@@ -113,7 +115,7 @@ win_spout_output_settings::win_spout_output_settings(QWidget *parent)
 	ui->tableWidget_outputs->verticalHeader()->setDefaultSectionSize(kOutputRowHeight);
 	ui->tableWidget_outputs->verticalHeader()->setMinimumSectionSize(kOutputRowHeight);
 	ui->tableWidget_outputs->setWordWrap(false);
-	ui->tableWidget_outputs->setMinimumHeight(140);
+	ui->tableWidget_outputs->setMinimumHeight(100);
 	if (auto *canvasHeader = ui->tableWidget_outputs->horizontalHeaderItem(0)) {
 		canvasHeader->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 	}
@@ -128,13 +130,13 @@ win_spout_output_settings::win_spout_output_settings(QWidget *parent)
 		statusHeader->setTextAlignment(Qt::AlignCenter);
 	}
 
-	connect(ui->pushButton_start, &QPushButton::clicked, this, &win_spout_output_settings::on_start_selected);
-	connect(ui->pushButton_stop, &QPushButton::clicked, this, &win_spout_output_settings::on_stop_selected);
-	connect(ui->pushButton_start_all, &QPushButton::clicked, this, &win_spout_output_settings::on_start_all);
-	connect(ui->pushButton_stop_all, &QPushButton::clicked, this, &win_spout_output_settings::on_stop_all);
-	connect(ui->pushButton_add, &QPushButton::clicked, this, &win_spout_output_settings::on_add_output);
-	connect(ui->pushButton_remove, &QPushButton::clicked, this, &win_spout_output_settings::on_remove_output);
-	connect(ui->checkBox_continuous, &QCheckBox::toggled, this, &win_spout_output_settings::on_table_changed);
+	connect(ui->pushButton_start, &QPushButton::clicked, this, &win_spout_output_settings::handle_start_selected);
+	connect(ui->pushButton_stop, &QPushButton::clicked, this, &win_spout_output_settings::handle_stop_selected);
+	connect(ui->pushButton_start_all, &QPushButton::clicked, this, &win_spout_output_settings::handle_start_all);
+	connect(ui->pushButton_stop_all, &QPushButton::clicked, this, &win_spout_output_settings::handle_stop_all);
+	connect(ui->pushButton_add, &QPushButton::clicked, this, &win_spout_output_settings::handle_add_output);
+	connect(ui->pushButton_remove, &QPushButton::clicked, this, &win_spout_output_settings::handle_remove_output);
+	connect(ui->checkBox_continuous, &QCheckBox::toggled, this, &win_spout_output_settings::handle_table_changed);
 
 	win_spout_config *config = win_spout_config::get();
 	ui->checkBox_continuous->setChecked(config->continuous_broadcast);
@@ -184,7 +186,7 @@ void win_spout_output_settings::load_table()
 	ui->tableWidget_outputs->setRowCount(0);
 
 	if (config->outputs.isEmpty()) {
-		on_add_output();
+		handle_add_output();
 		return;
 	}
 
@@ -195,10 +197,10 @@ void win_spout_output_settings::load_table()
 		auto *combo = new QComboBox();
 		populate_canvas_combo(combo, conf.canvasUuid, conf.canvasName);
 		connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-			&win_spout_output_settings::on_table_changed);
+			&win_spout_output_settings::handle_table_changed);
 
 		auto *nameEdit = new QLineEdit(conf.spoutName);
-		connect(nameEdit, &QLineEdit::textChanged, this, &win_spout_output_settings::on_table_changed);
+		connect(nameEdit, &QLineEdit::textChanged, this, &win_spout_output_settings::handle_table_changed);
 		style_matched_editors(combo, nameEdit);
 		ui->tableWidget_outputs->setCellWidget(row, 0, wrap_canvas_combo(combo));
 		ui->tableWidget_outputs->setCellWidget(row, 1, nameEdit);
@@ -206,7 +208,7 @@ void win_spout_output_settings::load_table()
 		auto *autoBox = new QCheckBox();
 		autoBox->setToolTip(QString::fromUtf8(obs_module_text("autostarttip")));
 		autoBox->setChecked(conf.autoStart);
-		connect(autoBox, &QCheckBox::toggled, this, &win_spout_output_settings::on_table_changed);
+		connect(autoBox, &QCheckBox::toggled, this, &win_spout_output_settings::handle_table_changed);
 		ui->tableWidget_outputs->setCellWidget(row, 2, make_centered_autostart_cell(autoBox));
 		ui->tableWidget_outputs->setRowHeight(row, kOutputRowHeight);
 
@@ -311,13 +313,13 @@ win_spout_output_settings::~win_spout_output_settings()
 	delete ui;
 }
 
-void win_spout_output_settings::on_table_changed()
+void win_spout_output_settings::handle_table_changed()
 {
 	save_settings();
 	update_all_running_states();
 }
 
-void win_spout_output_settings::on_add_output()
+void win_spout_output_settings::handle_add_output()
 {
 	const int row = ui->tableWidget_outputs->rowCount();
 	ui->tableWidget_outputs->insertRow(row);
@@ -325,14 +327,14 @@ void win_spout_output_settings::on_add_output()
 	auto *combo = new QComboBox();
 	populate_canvas_combo(combo, QString(), QString());
 	connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-		&win_spout_output_settings::on_table_changed);
+		&win_spout_output_settings::handle_table_changed);
 
 	QString sender = "OBS_Spout";
 	if (row > 0) {
 		sender = QString("OBS_Spout_%1").arg(row + 1);
 	}
 	auto *nameEdit = new QLineEdit(sender);
-	connect(nameEdit, &QLineEdit::textChanged, this, &win_spout_output_settings::on_table_changed);
+	connect(nameEdit, &QLineEdit::textChanged, this, &win_spout_output_settings::handle_table_changed);
 	style_matched_editors(combo, nameEdit);
 	ui->tableWidget_outputs->setCellWidget(row, 0, wrap_canvas_combo(combo));
 	ui->tableWidget_outputs->setCellWidget(row, 1, nameEdit);
@@ -340,7 +342,7 @@ void win_spout_output_settings::on_add_output()
 	auto *autoBox = new QCheckBox();
 	autoBox->setToolTip(QString::fromUtf8(obs_module_text("autostarttip")));
 	autoBox->setChecked(false);
-	connect(autoBox, &QCheckBox::toggled, this, &win_spout_output_settings::on_table_changed);
+	connect(autoBox, &QCheckBox::toggled, this, &win_spout_output_settings::handle_table_changed);
 	ui->tableWidget_outputs->setCellWidget(row, 2, make_centered_autostart_cell(autoBox));
 	ui->tableWidget_outputs->setRowHeight(row, kOutputRowHeight);
 
@@ -349,7 +351,7 @@ void win_spout_output_settings::on_add_output()
 	save_settings();
 }
 
-void win_spout_output_settings::on_remove_output()
+void win_spout_output_settings::handle_remove_output()
 {
 	const int row = ui->tableWidget_outputs->currentRow();
 	if (row < 0) {
@@ -366,7 +368,7 @@ void win_spout_output_settings::on_remove_output()
 	save_settings();
 }
 
-void win_spout_output_settings::on_start_selected()
+void win_spout_output_settings::handle_start_selected()
 {
 	const int row = ui->tableWidget_outputs->currentRow();
 	if (row < 0) {
@@ -381,7 +383,7 @@ void win_spout_output_settings::on_start_selected()
 	update_row_running_state(row);
 }
 
-void win_spout_output_settings::on_stop_selected()
+void win_spout_output_settings::handle_stop_selected()
 {
 	const int row = ui->tableWidget_outputs->currentRow();
 	if (row < 0) {
@@ -394,7 +396,7 @@ void win_spout_output_settings::on_stop_selected()
 	update_row_running_state(row);
 }
 
-void win_spout_output_settings::on_start_all()
+void win_spout_output_settings::handle_start_all()
 {
 	save_settings();
 	for (int row = 0; row < ui->tableWidget_outputs->rowCount(); row++) {
@@ -409,7 +411,7 @@ void win_spout_output_settings::on_start_all()
 	update_all_running_states();
 }
 
-void win_spout_output_settings::on_stop_all()
+void win_spout_output_settings::handle_stop_all()
 {
 	spout_output_stop_all();
 	update_all_running_states();

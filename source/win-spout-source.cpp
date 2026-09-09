@@ -95,7 +95,7 @@ static void win_spout_source_init(void *data, bool forced = false)
 
 	if (totalSenders == 0) {
 		if (context->spout_status != -2) {
-			info("No active Spout cameras");
+			debug("No active Spout cameras");
 			context->spout_status = -2;
 		}
 		return;
@@ -126,7 +126,7 @@ static void win_spout_source_init(void *data, bool forced = false)
 		}
 		if (!exists) {
 			if (context->spout_status != -5) {
-				info("Sorry, Sender Name %s not found", context->senderName);
+				debug("Sorry, Sender Name %s not found", context->senderName);
 				context->spout_status = -5;
 			}
 			return;
