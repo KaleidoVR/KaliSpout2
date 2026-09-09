@@ -33,13 +33,13 @@
     },
     "platformConfig": {
         "macos": {
-            "bundleId": "com.example.plugintemplate-for-obs"
+            "bundleId": "com.kaleidovr.kalispout2"
         }
     },
     "name": "win-spout",
-    "displayName": "Spout2 Plugin for OBS (KaleidoVR)",
-    "version": "1.12.2",
-    "author": "Campbell Morgan / KaleidoVR",
-    "website": "https://github.com/KaleidoVR/obs-spout2-plugin",
-    "email": "support@offworld.live"
+    "displayName": "KaliSpout2",
+    "version": "1.12.3",
+    "author": "KaleidoVR",
+    "website": "https://github.com/KaleidoVR/KaliSpout2",
+    "email": "KaleidoVR@users.noreply.github.com"
 }

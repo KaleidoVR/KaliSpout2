@@ -1,86 +1,44 @@
-Spout2 Plugin for OBS Studio (64bit)
+KaliSpout2
 =========
 
-This plugin enables the import and export of shared textures at high resolution to and from [SPOUT2](https://github.com/leadedge/Spout2) compatible
-programs.
+**KaliSpout2** is the [KaleidoVR](https://github.com/KaleidoVR) fork of the OBS Spout2 plugin.
 
-## Why
+It enables import and export of shared GPU textures with [SPOUT2](https://github.com/leadedge/Spout2) compatible apps, with first-class support for **OBS Studio 32.2.2+** multi-canvas setups used by Aitum Stream Suite, Vertical, and Multistream.
 
-Previously the only way to import shared textures from SPOUT was via the DirectShow `SpoutCam` interface or by screen-capturing
-the full-screen output of the `SpoutReceiver` program.
+Upstream project: [Off-World-Live/obs-spout2-plugin](https://github.com/Off-World-Live/obs-spout2-plugin).
 
-The `SpoutCam` is limited to standard webcam resolutions and capped at `1920x1080` and capturing the SpoutReceiver is both
-inefficient and limited by your current screen resolution.
+## KaleidoVR fork highlights
 
-Previously, there was no way of outputting Spout video textures from OBS. 
-
-This plugin implements the SPOUT2 SDK, creates an OBS Source from the SPOUT shared texture and a Spout output which sends the content of an OBS canvas to Spout.
+- Per-canvas Spout senders (bind each output to that canvas’s video mix)
+- Fixes extra-canvas blackout when Spout output is enabled
+- **KaleidoVR → KaliSpout2 Output Settings** menu (shares the menu with [Kaleido Launcher](https://github.com/KaleidoVR/Kaleido-Launcher))
+- Auto-start is opt-in, cleared on upgrade, and retries when canvases appear after load
+- Load log prints **Version** and this repo URL for easy install checks
 
 ## OBS 32.2+ canvases (Aitum Vertical / Stream Suite / Multistream)
 
-Open **KaleidoVR → Spout Output Settings** (this KaleidoVR fork places the dialog under the same top-level **KaleidoVR** menu created by [Kaleido Launcher](https://github.com/KaleidoVR/Kaleido-Launcher) / App Autostarter, not under Tools). Spout attaches after OBS finishes loading so it joins that existing menu instead of creating a second one. The dialog lists every frontend canvas and can start a separate Spout sender per canvas. Each output is bound with `obs_output_set_media` to that canvas's video mix so BGRA conversion does not take over the global mix or black out extra canvases.
-
-Auto-start is opt-in per canvas, defaults off, and is delayed until `OBS_FRONTEND_EVENT_FINISHED_LOADING` (queued on the UI thread) so canvas plugins can finish `obs_canvas_reset_video` first. If a canvas is added later (common with Aitum), Auto-start is retried on `OBS_FRONTEND_EVENT_CANVAS_ADDED` and again on a short timer until the canvas video mix exists. Upgrading clears stale Auto-start flags that previously survived OBS reinstalls while the Spout user config remained (see Off-World-Live issues #89 / #92).
-
-Spout Capture sources no longer treat extra-canvas redraws as a sender reset, keep GPU textures until the source is hidden on every canvas, and rate-limit transient "sender gone" resets that previously flooded the OBS log. Extra-canvas Tools outputs never fall back to the main mix when their own video mix is missing.
-
-Please see installation and usage guide [here](http://docs.offworld.live/#/obs-spout-plugin/README?id=spout-plugin-for-obs-studio)
-
-## Acknowledgements
-
-Thanks to the developer of [OBS-OpenVR-Input-Plugin](https://github.com/baffler/OBS-OpenVR-Input-Plugin) whose source
-helped greatly in getting my head around the OBS API.
-
-Thanks to the OBS team and their discord channel
-
-Thanks to the authors of [SPOUT](https://github.com/leadedge/Spout2) for the library and clear documentation
+Open **KaleidoVR → KaliSpout2 Output Settings**. Each row can target a frontend canvas (including Aitum extra canvases) as its own Spout sender. Outputs use `obs_output_set_media` on that canvas mix so BGRA conversion does not black out other canvases.
 
 ## Installation
 
-- Go to the [Releases Page](https://github.com/Off-World-Live/obs-spout2-plugin/releases)
-- Download the windows installer: `OBS_Spout2_Plugin_Installer.exe`
-- Run the installer (accepting installation from untrusted source)
-- Select the `OBS` directory if not the default install location
+- Download the latest Windows installer from the [Releases page](https://github.com/KaleidoVR/KaliSpout2/releases)
+- Run `KaliSpout2_Install_v*.exe`
+- Default install path: `C:\ProgramData\obs-studio\plugins\win-spout`
 
-> N.B there are no current plans for 32bit builds, although theoretically this should be possible
+## Building
 
-## Contributing / Building
-
-- Clone this repo recursively
 ```
-git clone --recursive git@github.com:off-world-live/obs-spout2-plugin
+git clone --recursive https://github.com/KaleidoVR/KaliSpout2.git
 ```
-- Install [CMAKE min version 3.28](https://cmake.org/download/)
-- Either configure and generate through the CMAKE Gui or through the command line for the `windows-x64` architecture
-- Run `Configure`, `Generate` and then `Open Project` in the `CMake Gui`
 
-### Building a release locally
+- Install [CMake 3.28+](https://cmake.org/download/)
+- Configure for `windows-x64`, then build
+- CI packages the NSIS installer via `.github/scripts/BuildInstaller.ps1`
 
-- Open `git bash` or similar bash terminal interpreter
-- Run `./scripts/Release.sh <version number>`
-- You should find the executable (installer) and zip file in the main `win-spout` directory
-### Building the windows installer
+## Acknowledgements
 
-- Download the latest version of [NSIS here](https://nsis.sourceforge.io/Download);
-- Set the the `APPVERSION` variable in `win-spout-installer.nsi`
-- Compile [win-spout-installer.nsi](./win-spout-installer.nsi)
-
-Pull Requests welcome!
-
-## Contributors
-
-Thanks to everybody that submitted bug tickets and in particular the code contributors:
-
-- [@shugen002](https://github.com/shugen002)
-- [@mzlt](https://github.com/mzlt)
-- [@terids](https://github.com/terids)
-
-## Roadmap
-
-- [x] Improve CMakeLists.txt to copy `Spout.dll` automatically (thanks to [@shugen002](https://github.com/shugen002))
-- [x] Spout Output
-- [x] Spout Filter Output
+Thanks to Off World Live / Campbell Morgan for the original plugin, the OBS team, Spout authors, and contributors including [@shugen002](https://github.com/shugen002), [@mzlt](https://github.com/mzlt), and [@terids](https://github.com/terids).
 
 ## License
 
-This plugin authored by Campbell Morgan is Copyright Off World Live Ltd, 2019-2021 and [licenced under the GPL V.2](./LICENCE).
+GPL v2 — see [LICENSE](./LICENSE). Original plugin Copyright Off World Live Ltd, 2019-2021.

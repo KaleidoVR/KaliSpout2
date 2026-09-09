@@ -4,16 +4,16 @@ RequestExecutionLevel admin
 Unicode True
 
 ; Define your application name
-!define APPNAME "Spout 2 OBS Plugin (KaleidoVR)"
+!define APPNAME "KaliSpout2"
 !define APPVERSION "DebugVersion"
 !define RELEASEDIR "release\Release"
-!define APPNAMEANDVERSION "Spout 2 OBS Plugin ${APPVERSION}"
+!define APPNAMEANDVERSION "KaliSpout2 ${APPVERSION}"
 
 ; Main Install settings
 Name "${APPNAMEANDVERSION}"
 InstallDirRegKey HKLM "Software\${APPNAME}" ""
 InstallDir "$COMMONPROGRAMDATA\obs-studio\plugins\win-spout"
-OutFile "..\..\release\OBS_Spout2_Plugin_Install_v${APPVERSION}.exe"
+OutFile "..\..\release\KaliSpout2_Install_v${APPVERSION}.exe"
 
 ; Use compression
 SetCompressor Zlib
@@ -36,7 +36,7 @@ SetCompressor Zlib
 ; Set languages (first is default language)
 !insertmacro MUI_LANGUAGE "English"
 !insertmacro MUI_RESERVEFILE_LANGDLL
-Section "Spout 2 OBS Plugin" Section1
+Section "KaliSpout2" Section1
 	; Install into the $INSTDIR chosen on the directory page (default
 	; ProgramData\obs-studio\plugins\win-spout) instead of always forcing ProgramData.
 
@@ -56,8 +56,8 @@ Section "Spout 2 OBS Plugin" Section1
 	File "..\..\data\locale\zh-CN.ini"
 	File "..\..\data\locale\pt-BR.ini"
 	File "..\..\data\locale\es-ES.ini"
-	CreateDirectory "$SMPROGRAMS\Spout 2 OBS Plugin"
-	CreateShortCut "$SMPROGRAMS\Spout 2 OBS Plugin\Uninstall Spout2 OBS Plugin.lnk" "$INSTDIR\uninstall-spout2-plugin.exe"
+	CreateDirectory "$SMPROGRAMS\KaliSpout2"
+	CreateShortCut "$SMPROGRAMS\KaliSpout2\Uninstall KaliSpout2.lnk" "$INSTDIR\uninstall-spout2-plugin.exe"
 
 SectionEnd
 
@@ -67,7 +67,7 @@ Section -FinishSection
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayName" "${APPNAME}"
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "UninstallString" "$INSTDIR\uninstall-spout2-plugin.exe"
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "Publisher" "KaleidoVR"
-	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "HelpLink" "https://github.com/KaleidoVR/obs-spout2-plugin"
+	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "HelpLink" "https://github.com/KaleidoVR/KaliSpout2"
 	WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayVersion" "${APPVERSION}"
 	WriteUninstaller "$INSTDIR\uninstall-spout2-plugin.exe"
 
@@ -75,10 +75,10 @@ SectionEnd
 
 ; Modern install component descriptions
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
-	!insertmacro MUI_DESCRIPTION_TEXT ${Section1} "Install the Spout 2 OBS Plugin to your installed OBS Studio version"
+	!insertmacro MUI_DESCRIPTION_TEXT ${Section1} "Install KaliSpout2 (Spout2 for OBS) into your OBS Studio plugins folder"
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
-UninstallText "This will uninstall Spout2 OBS Studio plugin from your system"
+UninstallText "This will uninstall KaliSpout2 from your system"
 
 ;Uninstall section
 Section Uninstall
@@ -93,9 +93,9 @@ Section Uninstall
 	Delete "$INSTDIR\uninstall-spout2-plugin.exe"
 
 	; Delete Shortcuts
-	Delete "$SMPROGRAMS\Spout 2 OBS Plugin\Uninstall Spout2 OBS Plugin.lnk"
+	Delete "$SMPROGRAMS\KaliSpout2\Uninstall KaliSpout2.lnk"
 
-	; Clean up Spout 2 OBS Plugin
+	; Clean up KaliSpout2
 	Delete "$INSTDIR\bin\64bit\win-spout.dll"
 	Delete "$INSTDIR\bin\64bit\Spout.dll"
 	Delete "$INSTDIR\bin\64bit\SpoutDX.dll"
@@ -106,7 +106,7 @@ Section Uninstall
 	Delete "$INSTDIR\data\locale\es-ES.ini"
 
 	; Remove remaining directories
-	RMDir "$SMPROGRAMS\Spout 2 OBS Plugin"
+	RMDir "$SMPROGRAMS\KaliSpout2"
 
 SectionEnd
 
