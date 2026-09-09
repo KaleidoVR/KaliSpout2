@@ -464,7 +464,7 @@ static obs_properties_t *win_spout_properties(void *data)
 
 	obs_properties_t *props = obs_properties_create();
 
-	obs_property_t *sender_list = obs_properties_add_list(props, SPOUT_SENDER_LIST, obs_module_text("SpoutSenders"),
+	obs_property_t *sender_list = obs_properties_add_list(props, SPOUT_SENDER_LIST, obs_module_text("spoutsenders"),
 							      OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
 
 	fill_senders(context->spout_receiver_ptr, sender_list);

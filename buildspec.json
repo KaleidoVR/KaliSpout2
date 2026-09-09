@@ -37,9 +37,9 @@
         }
     },
     "name": "win-spout",
-    "displayName": "Spout2 Plugin for OBS",
-    "version": "1.12.0",
-    "author": "Campbell Morgan",
-    "website": "https://github.com/Off-World-Live/obs-spout2-plugin",
+    "displayName": "Spout2 Plugin for OBS (KaleidoVR)",
+    "version": "1.12.1",
+    "author": "Campbell Morgan / KaleidoVR",
+    "website": "https://github.com/KaleidoVR/obs-spout2-plugin",
     "email": "support@offworld.live"
 }
