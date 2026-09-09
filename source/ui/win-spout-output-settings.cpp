@@ -77,8 +77,7 @@ win_spout_output_settings::win_spout_output_settings(QWidget *parent)
 	ui->tableWidget_outputs->setStyleSheet(
 		QStringLiteral("QTableWidget::item { padding-top: 4px; padding-bottom: 4px; }"));
 	if (auto *autoHeader = ui->tableWidget_outputs->horizontalHeaderItem(2)) {
-		autoHeader->setToolTip(
-			QString::fromUtf8(obs_module_text("autostarttip")));
+		autoHeader->setToolTip(QString::fromUtf8(obs_module_text("autostarttip")));
 	}
 
 	connect(ui->pushButton_start, &QPushButton::clicked, this, &win_spout_output_settings::on_start_selected);
