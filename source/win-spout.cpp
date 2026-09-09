@@ -567,6 +567,8 @@ bool obs_module_load(void)
 	obs_register_source(&spout_filter_info);
 
 	blog(LOG_INFO, "win-spout loaded (OBS canvas-aware Spout output, KaleidoVR menu)!");
+	blog(LOG_INFO, "win-spout loaded (Version %s)", PLUGIN_VERSION);
+	blog(LOG_INFO, "win-spout loaded (%s)", PLUGIN_REPO_URL);
 
 	return true;
 }
