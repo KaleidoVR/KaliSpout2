@@ -27,7 +27,7 @@ If applicable, add screenshots to help explain your problem.
 
 **About the Software:**
  - OBS Version [e.g. 32.2.2]
- - KaliSpout2 Version [e.g. 1.13.1]
+ - KaliSpout2 Version [e.g. 1.13.2]
 
 
 **About Your Machine :**

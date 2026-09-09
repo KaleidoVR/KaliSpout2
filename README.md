@@ -19,10 +19,13 @@ Share GPU textures with [Spout2](https://github.com/leadedge/Spout2)-compatible 
 Open **KaleidoVR → KaliSpout2 Output Settings**. Each row can target a frontend canvas (including Aitum extra canvases) as its own Spout sender. Outputs use `obs_output_set_media` on that canvas mix so BGRA conversion does not black out other canvases.
 
 ## Install
-1. Download the latest Windows installer from [Releases](https://github.com/KaleidoVR/KaliSpout2/releases).
-2. Run `KaliSpout2_Install_v*.exe`.
-3. Default install path: `C:\ProgramData\obs-studio\plugins\win-spout`
-4. Restart OBS, then open **KaleidoVR → KaliSpout2 Output Settings**.
+1. Close OBS Studio.
+2. Download the latest Windows installer from [Releases](https://github.com/KaleidoVR/KaliSpout2/releases).
+3. Run `KaliSpout2_Install_v*.exe`.
+4. Default path: `C:\ProgramData\obs-studio\plugins\win-spout` (same folder as the original Spout 2 OBS Plugin).
+5. Restart OBS, then open **KaleidoVR → KaliSpout2 Output Settings**.
+
+The installer **replaces** an existing Spout 2 OBS Plugin install in that folder and removes the old Apps & Features entry / Start Menu uninstall shortcut, so you do not need to uninstall Spout first. Only one `win-spout` plugin can be loaded at a time.
 
 ## Requirements
 - Windows x64
