@@ -157,20 +157,10 @@ static video_t *video_from_canvas(obs_canvas_t *canvas)
 static void bind_output_to_canvas(obs_output_t *output, obs_canvas_t *canvas)
 {
 	video_t *video = video_from_canvas(canvas);
-	if (!video) {
-		obs_canvas_t *main = obs_get_main_canvas();
-		if (main && main != canvas) {
-			video = video_from_canvas(main);
-		}
-		if (main) {
-			obs_canvas_release(main);
-		}
-	}
 
-	// Never fall back to obs_get_video() unless this really is the main canvas.
-	// Binding a raw output to the global mix and then converting to BGRA can
-	// starve additional canvases (Aitum Vertical / Stream Suite) of a usable
-	// video mix and leave them black.
+	// Never fall back to another canvas's mix or to obs_get_video() for non-main
+	// canvases. Binding the wrong mix (or converting the global mix to BGRA) can
+	// black out Aitum Vertical / Stream Suite canvases.
 	if (!video && canvas && (obs_canvas_get_flags(canvas) & MAIN)) {
 		video = obs_get_video();
 	}
@@ -241,7 +231,7 @@ bool spout_output_start(const char *canvasUuid, const char *canvasName, const ch
 	}
 
 	if (obs_output_active(output)) {
-		obs_output_stop(output);
+		return true;
 	}
 
 	const bool started = obs_output_start(output);
@@ -334,6 +324,10 @@ void spout_schedule_autostart()
 				if (!conf.autoStart || conf.spoutName.isEmpty()) {
 					continue;
 				}
+				if (spout_output_is_active(conf.canvasUuid.toUtf8().constData(),
+							   conf.canvasName.toUtf8().constData())) {
+					continue;
+				}
 				spout_output_start(conf.canvasUuid.toUtf8().constData(),
 						   conf.canvasName.toUtf8().constData(),
 						   conf.spoutName.toUtf8().constData());
@@ -371,6 +365,10 @@ static void spout_obs_event(enum obs_frontend_event event, void *)
 					spout_output_stop(entry.uuid.c_str(), entry.name.c_str());
 				}
 			}
+		} else {
+			// Aitum / Stream Suite may create canvases after FINISHED_LOADING.
+			// Retry Auto-start once the canvas (and its video mix) exists.
+			spout_schedule_autostart();
 		}
 		if (spout_output_settings) {
 			spout_output_settings->refresh_canvases();
