@@ -1,7 +1,7 @@
 # KaliSpout2
 
 <p align="center">
-  <img src="https://assets.kalivr.com/Kali-Logo/Kali_Logo.png" alt="KaleidoVR" width="300">
+  <img src="logo/Kali_Logo.png" alt="KaleidoVR" width="300">
 </p>
 
 **KaliSpout2** is the [KaleidoVR](https://github.com/KaleidoVR) OBS Studio plugin for Spout2 shared-texture input and output.
