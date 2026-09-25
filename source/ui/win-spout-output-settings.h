@@ -21,26 +21,20 @@ public:
 	explicit win_spout_output_settings(QWidget *parent = 0);
 	~win_spout_output_settings();
 	void refresh_canvases();
+	void set_started_button_state(bool started);
 
 private Q_SLOTS:
-	void handle_start_selected();
-	void handle_stop_selected();
-	void handle_start_all();
-	void handle_stop_all();
-	void handle_add_output();
-	void handle_remove_output();
-	void handle_table_changed();
+	void on_start();
+	void on_stop();
+	void on_settings_changed();
+	void on_canvas_changed();
 
 private:
 	Ui::win_spout_output_settings *ui;
 	void save_settings();
-	void load_table();
-	void populate_canvas_combo(class QComboBox *combo, const QString &uuid, const QString &name);
-	void row_canvas(int row, QString &uuid, QString &name);
-	QString row_sender(int row);
-	bool row_autostart(int row);
-	void update_row_running_state(int row);
-	void update_all_running_states();
+	void populate_canvas_combo(const QString &uuid, const QString &name);
+	void current_canvas(QString &uuid, QString &name) const;
+	bool start_current();
 	void showEvent(QShowEvent *event) override;
 };
 

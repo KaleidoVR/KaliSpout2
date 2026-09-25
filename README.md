@@ -9,18 +9,15 @@
 Share GPU textures with [Spout2](https://github.com/leadedge/Spout2)-compatible apps, with support for **OBS Studio 32.2.2+** multi-canvas setups used by Aitum Stream Suite and Aitum Vertical.
 
 ## Features
-- Per-canvas Spout senders (each output binds to that canvas’s video mix)
+- One Spout sender, bound to a chosen OBS canvas (including Aitum extra canvases)
+- Canvas dropdown in **KaleidoVR → KaliSpout2 Output Settings** — same Start/Stop dialog as original Spout2
 - Fixes extra-canvas blackout when Spout output is enabled
-- **KaleidoVR → KaliSpout2 Output Settings** (same menu as [Kaleido Launcher](https://github.com/KaleidoVR/Kaleido-Launcher))
-- Auto-start is opt-in, cleared on upgrade, and retries when canvases appear after load
+- Settings share the **KaleidoVR** menu with [Kaleido Launcher](https://github.com/KaleidoVR/Kaleido-Launcher)
+- Auto-start is opt-in, cleared on upgrade, and retries when the selected canvas appears after load
 - Load log prints **Version** and this repo URL for easy install checks
 
 ## OBS 32.2+ canvases
-Open **KaleidoVR → KaliSpout2 Output Settings**. Each row can target a frontend canvas (including Aitum extra canvases) as its own Spout sender. Outputs use `obs_output_set_media` on that canvas mix so BGRA conversion does not black out other canvases.
-
-<p align="center">
-  <img width="722" height="412" alt="image" src="https://github.com/user-attachments/assets/14fdf298-f8ab-41d3-ae4e-76af6685f2fa" />
-</p>
+Open **KaleidoVR → KaliSpout2 Output Settings**. Choose which frontend canvas to send (including Aitum extra canvases). The output uses `obs_output_set_media` on that canvas mix so BGRA conversion does not black out other canvases. Only one sender is active at a time; changing the canvas dropdown while running switches the live sender.
 
 ## Install
 1. Close OBS Studio.

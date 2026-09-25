@@ -10,6 +10,7 @@
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <QAction>
+#include <QByteArray>
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
@@ -19,6 +20,7 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "win-spout.h"
 #include "ui/win-spout-output-settings.h"
@@ -185,6 +187,20 @@ bool spout_output_start(const char *canvasUuid, const char *canvasName, const ch
 
 	const std::string key = output_key(canvasUuid, canvasName);
 
+	// One sender at a time: stop every other canvas output before starting this one.
+	std::vector<SpoutActiveOutput> others;
+	{
+		std::lock_guard<std::mutex> lock(outputs_mutex);
+		for (const auto &[active_key, entry] : active_outputs) {
+			if (active_key != key) {
+				others.push_back(entry);
+			}
+		}
+	}
+	for (const auto &entry : others) {
+		spout_output_stop(entry.uuid.c_str(), entry.name.c_str());
+	}
+
 	obs_canvas_t *canvas = spout_find_canvas(canvasUuid, canvasName);
 	if (!canvas) {
 		blog(LOG_ERROR, "Cannot start Spout output: canvas not found (uuid=%s name=%s)",
@@ -286,6 +302,18 @@ bool spout_output_is_active(const char *canvasUuid, const char *canvasName)
 	return obs_output_active(it->second.output);
 }
 
+bool spout_output_is_any_active()
+{
+	std::lock_guard<std::mutex> lock(outputs_mutex);
+	for (const auto &[key, entry] : active_outputs) {
+		UNUSED_PARAMETER(key);
+		if (entry.output && obs_output_active(entry.output)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void spout_output_stop_all()
 {
 	std::map<std::string, SpoutActiveOutput> snapshot;
@@ -333,18 +361,15 @@ void spout_schedule_autostart()
 		[]() {
 			win_spout_config *config = win_spout_config::get();
 			bool pending = false;
-			for (const auto &conf : config->outputs) {
-				if (!conf.autoStart || conf.spoutName.isEmpty()) {
-					continue;
-				}
-				if (spout_output_is_active(conf.canvasUuid.toUtf8().constData(),
-							   conf.canvasName.toUtf8().constData())) {
-					continue;
-				}
-				if (!spout_output_start(conf.canvasUuid.toUtf8().constData(),
-							conf.canvasName.toUtf8().constData(),
-							conf.spoutName.toUtf8().constData())) {
-					pending = true;
+			if (config->auto_start && !config->spout_output_name.isEmpty()) {
+				const QByteArray uuid = config->canvas_uuid.toUtf8();
+				const QByteArray name = config->canvas_name.toUtf8();
+				const QByteArray sender = config->spout_output_name.toUtf8();
+				if (!spout_output_is_active(uuid.constData(), name.constData())) {
+					if (!spout_output_start(uuid.constData(), name.constData(),
+								sender.constData())) {
+						pending = true;
+					}
 				}
 			}
 

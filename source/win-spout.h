@@ -30,6 +30,7 @@ obs_canvas_t *spout_find_canvas(const char *uuid, const char *name);
 bool spout_output_start(const char *canvasUuid, const char *canvasName, const char *SpoutName);
 void spout_output_stop(const char *canvasUuid, const char *canvasName);
 bool spout_output_is_active(const char *canvasUuid, const char *canvasName);
+bool spout_output_is_any_active();
 void spout_output_stop_all();
 
 // Legacy single-output helpers (main canvas)

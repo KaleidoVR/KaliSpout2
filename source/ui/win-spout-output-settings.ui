@@ -9,27 +9,30 @@
 			<rect>
 				<x>0</x>
 				<y>0</y>
-				<width>720</width>
-				<height>380</height>
+				<width>480</width>
+				<height>250</height>
 			</rect>
 		</property>
 		<property name="minimumSize">
 			<size>
-				<width>720</width>
-				<height>360</height>
+				<width>420</width>
+				<height>220</height>
 			</size>
 		</property>
 		<property name="windowTitle">
 			<string>KaliSpout2 Output Settings</string>
 		</property>
 		<layout class="QVBoxLayout" name="verticalLayout_main">
+			<property name="spacing">
+				<number>10</number>
+			</property>
 			<item>
-				<widget class="QLabel" name="label_help">
-					<property name="wordWrap">
-						<bool>true</bool>
+				<widget class="QCheckBox" name="checkBox_auto">
+					<property name="toolTip">
+						<string>When checked, the Spout sender starts automatically after OBS finishes loading. Left unchecked by default so Spout does not surprise-start after an OBS reinstall while plugin settings remain.</string>
 					</property>
 					<property name="text">
-						<string>Each row sends one OBS canvas (including Aitum extra canvases) as its own Spout sender. The output is bound to that canvas video mix so other canvases are not converted or blacked out. Auto-start is off by default and only runs after OBS finishes loading when you enable it for a row.</string>
+						<string>AutoStart</string>
 					</property>
 				</widget>
 			</item>
@@ -50,90 +53,88 @@ When disabled, the previous behaviour is kept: a filter only sends while its sou
 				</widget>
 			</item>
 			<item>
-				<widget class="QTableWidget" name="tableWidget_outputs">
-					<property name="columnCount">
-						<number>4</number>
+				<layout class="QFormLayout" name="formLayout">
+					<property name="horizontalSpacing">
+						<number>12</number>
 					</property>
-					<property name="selectionBehavior">
-						<enum>QAbstractItemView::SelectRows</enum>
+					<property name="verticalSpacing">
+						<number>8</number>
 					</property>
-					<property name="selectionMode">
-						<enum>QAbstractItemView::SingleSelection</enum>
-					</property>
-					<column>
-						<property name="text">
-							<string>Canvas</string>
-						</property>
-					</column>
-					<column>
-						<property name="text">
-							<string>Spout Sender</string>
-						</property>
-					</column>
-					<column>
-						<property name="text">
-							<string>Auto-start</string>
-						</property>
-					</column>
-					<column>
-						<property name="text">
-							<string>Status</string>
-						</property>
-					</column>
-				</widget>
+					<item row="0" column="0">
+						<widget class="QLabel" name="label_canvas">
+							<property name="text">
+								<string>Canvas</string>
+							</property>
+						</widget>
+					</item>
+					<item row="0" column="1">
+						<widget class="QComboBox" name="comboBox_canvas">
+							<property name="sizePolicy">
+								<sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+									<horstretch>0</horstretch>
+									<verstretch>0</verstretch>
+								</sizepolicy>
+							</property>
+							<property name="toolTip">
+								<string>Which OBS canvas to send. Extra canvases (Aitum Vertical, Stream Suite) appear here. Only one sender is active at a time.</string>
+							</property>
+						</widget>
+					</item>
+					<item row="1" column="0">
+						<widget class="QLabel" name="label_spoutname">
+							<property name="text">
+								<string>Spout Output Name</string>
+							</property>
+						</widget>
+					</item>
+					<item row="1" column="1">
+						<widget class="QLineEdit" name="lineEdit_spoutname">
+							<property name="placeholderText">
+								<string>OBS_Spout</string>
+							</property>
+						</widget>
+					</item>
+				</layout>
 			</item>
 			<item>
-				<layout class="QHBoxLayout" name="horizontalLayout_rows">
-					<item>
-						<widget class="QPushButton" name="pushButton_add">
-							<property name="text">
-								<string>Add canvas output</string>
-							</property>
-						</widget>
-					</item>
-					<item>
-						<widget class="QPushButton" name="pushButton_remove">
-							<property name="text">
-								<string>Remove</string>
-							</property>
-						</widget>
-					</item>
+				<spacer name="verticalSpacer">
+					<property name="orientation">
+						<enum>Qt::Vertical</enum>
+					</property>
+					<property name="sizeHint" stdset="0">
+						<size>
+							<width>20</width>
+							<height>16</height>
+						</size>
+					</property>
+				</spacer>
+			</item>
+			<item>
+				<layout class="QHBoxLayout" name="horizontalLayout_buttons">
 					<item>
 						<spacer name="horizontalSpacer">
 							<property name="orientation">
 								<enum>Qt::Horizontal</enum>
 							</property>
+							<property name="sizeHint" stdset="0">
+								<size>
+									<width>40</width>
+									<height>20</height>
+								</size>
+							</property>
 						</spacer>
 					</item>
-				</layout>
-			</item>
-			<item>
-				<layout class="QHBoxLayout" name="horizontalLayout_buttons">
 					<item>
 						<widget class="QPushButton" name="pushButton_start">
 							<property name="text">
-								<string>Start selected</string>
+								<string>Start</string>
 							</property>
 						</widget>
 					</item>
 					<item>
 						<widget class="QPushButton" name="pushButton_stop">
 							<property name="text">
-								<string>Stop selected</string>
-							</property>
-						</widget>
-					</item>
-					<item>
-						<widget class="QPushButton" name="pushButton_start_all">
-							<property name="text">
-								<string>Start all</string>
-							</property>
-						</widget>
-					</item>
-					<item>
-						<widget class="QPushButton" name="pushButton_stop_all">
-							<property name="text">
-								<string>Stop all</string>
+								<string>Stop</string>
 							</property>
 						</widget>
 					</item>

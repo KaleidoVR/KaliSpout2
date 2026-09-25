@@ -12,16 +12,8 @@
 
 #include <atomic>
 
-#include <QList>
 #include <QString>
 #include <obs-module.h>
-
-struct SpoutOutputConfig {
-	QString canvasUuid;
-	QString canvasName;
-	QString spoutName;
-	bool autoStart = false;
-};
 
 class win_spout_config {
 public:
@@ -32,7 +24,8 @@ public:
 
 	bool auto_start;
 	QString spout_output_name;
-	QList<SpoutOutputConfig> outputs;
+	QString canvas_uuid;
+	QString canvas_name;
 	// Continuous broadcast: when enabled, Spout output filters ignore whether their
 	// source is in the active scene, registering the sender and broadcasting from a
 	// cold start. When disabled the previous behaviour is kept (send only while the
