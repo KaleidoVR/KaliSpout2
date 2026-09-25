@@ -17,7 +17,11 @@ Share GPU textures with [Spout2](https://github.com/leadedge/Spout2)-compatible 
 - Load log prints **Version** and this repo URL for easy install checks
 
 ## OBS 32.2+ canvases
-Open **KaleidoVR → KaliSpout2 Output Settings**. Choose which frontend canvas to send (including Aitum extra canvases). The output uses `obs_output_set_media` on that canvas mix so BGRA conversion does not black out other canvases. Only one sender is active at a time; changing the canvas dropdown while running switches the live sender.
+Open **KaleidoVR → KaliSpout2 Output Settings**. Choose which frontend canvas to send (Aitum canvases). The output uses `obs_output_set_media` on that canvas mix so BGRA conversion does not black out other canvases. Only one sender is active at a time; changing the canvas dropdown while running switches the live sender.
+
+<p align="center">
+<img width="482" height="282" alt="image" src="https://github.com/user-attachments/assets/eb821bde-9e58-4ece-b714-707fe11fbb6e" />
+</p>
 
 ## Install
 1. Close OBS Studio.
