@@ -85,13 +85,6 @@ jobs:
             done
           done
 
-      - name: Checkout release notes 🧾
-        if: fromJSON(steps.check.outputs.validTag)
-        uses: actions/checkout@v4
-        with:
-          clean: false
-          fetch-depth: 1
-
       - name: Generate Checksums 🪪
         if: fromJSON(steps.check.outputs.validTag)
         run: |
@@ -99,15 +92,9 @@ jobs:
           if [[ "${RUNNER_DEBUG}" ]]; then set -x; fi
           shopt -s extglob
 
-          body="${{ github.workspace }}/RELEASE_BODY.txt"
-          : > "${body}"
-          if [[ -f "${{ github.workspace }}/WHATS-NEW.txt" ]]; then
-            cat "${{ github.workspace }}/WHATS-NEW.txt" >> "${body}"
-            printf '\n\n' >> "${body}"
-          fi
-          echo "### Checksums" >> "${body}"
+          echo "### Checksums" > ${{ github.workspace }}/CHECKSUMS.txt
           for file in ${{ github.workspace }}/@(*.exe|*.zip); do
-            echo "    ${file##*/}: $(sha256sum "${file}" | cut -d " " -f 1)" >> "${body}"
+            echo "    ${file##*/}: $(sha256sum "${file}" | cut -d " " -f 1)" >> ${{ github.workspace }}/CHECKSUMS.txt
           done
 
       - name: Create Release 🛫
@@ -120,7 +107,7 @@ jobs:
           prerelease: ${{ fromJSON(steps.check.outputs.prerelease) }}
           tag_name: ${{ steps.check.outputs.version }}
           name: ${{ needs.build-project.outputs.pluginName }} ${{ steps.check.outputs.version }}
-          body_path: ${{ github.workspace }}/RELEASE_BODY.txt
+          body_path: ${{ github.workspace }}/CHECKSUMS.txt
           files: |
             ${{ github.workspace }}/*.exe
             ${{ github.workspace }}/*.zip
