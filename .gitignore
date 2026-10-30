@@ -54,6 +54,7 @@ build
 !CMakePresets.json
 !LICENSE
 !README.md
+!WHATS-NEW.txt
 
 # Exclude lock files
 *.lock.json

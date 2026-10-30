@@ -38,6 +38,11 @@ struct win_spout_filter {
 	bool is_initialised;
 	// detect that source is still active by setting in _videorender() and clearing in _offscreen_render()
 	bool is_active;
+	// holding a "showing" ref on the parent to keep it rendering off-screen
+	bool showing_held;
+
+	// Enable/Disable hotkeys, listed under the filter's name in Settings > Hotkeys
+	obs_hotkey_pair_id hotkeys;
 };
 
 // forward decls
@@ -274,6 +279,26 @@ void win_spout_filter_update(void *data, obs_data_t *settings)
 	obs_add_main_render_callback(win_spout_offscreen_render, context);
 }
 
+static bool win_spout_filter_hotkey_enable(void *data, obs_hotkey_pair_id, obs_hotkey_t *, bool pressed)
+{
+	struct win_spout_filter *context = (win_spout_filter *)data;
+	if (!pressed || obs_source_enabled(context->source_context)) {
+		return false;
+	}
+	obs_source_set_enabled(context->source_context, true);
+	return true;
+}
+
+static bool win_spout_filter_hotkey_disable(void *data, obs_hotkey_pair_id, obs_hotkey_t *, bool pressed)
+{
+	struct win_spout_filter *context = (win_spout_filter *)data;
+	if (!pressed || !obs_source_enabled(context->source_context)) {
+		return false;
+	}
+	obs_source_set_enabled(context->source_context, false);
+	return true;
+}
+
 void *win_spout_filter_create(obs_data_t *settings, obs_source_t *source)
 {
 	struct win_spout_filter *context = (win_spout_filter *)bzalloc(sizeof(win_spout_filter));
@@ -286,6 +311,8 @@ void *win_spout_filter_create(obs_data_t *settings, obs_source_t *source)
 	context->stagesurface = nullptr;
 	context->is_initialised = false;
 	context->is_active = false;
+	context->showing_held = false;
+	context->hotkeys = OBS_INVALID_HOTKEY_PAIR_ID;
 
 	pthread_mutex_init_value(&context->mutex);
 	if (pthread_mutex_init(&context->mutex, NULL) != 0) {
@@ -297,6 +324,11 @@ void *win_spout_filter_create(obs_data_t *settings, obs_source_t *source)
 	context->source_context = source;
 
 	context->filter_sender = new spoutDX;
+
+	context->hotkeys = obs_hotkey_pair_register_source(
+		source, "SpoutFilter.Enable", obs_module_text("hotkeyenablefilter"), "SpoutFilter.Disable",
+		obs_module_text("hotkeydisablefilter"), win_spout_filter_hotkey_enable, win_spout_filter_hotkey_disable,
+		context, context);
 
 	win_spout_filter_update(context, settings);
 
@@ -312,7 +344,20 @@ void win_spout_filter_destroy(void *data)
 		return;
 	}
 
+	if (context->showing_held) {
+		obs_source_t *parent = obs_filter_get_parent(context->source_context);
+		if (parent) {
+			obs_source_dec_showing(parent);
+		}
+		context->showing_held = false;
+	}
+
 	obs_remove_main_render_callback(win_spout_offscreen_render, context);
+
+	if (context->hotkeys != OBS_INVALID_HOTKEY_PAIR_ID) {
+		obs_hotkey_pair_unregister(context->hotkeys);
+		context->hotkeys = OBS_INVALID_HOTKEY_PAIR_ID;
+	}
 
 	if (context->filter_sender) {
 		context->filter_sender->ReleaseSender();
@@ -346,10 +391,39 @@ void win_spout_filter_destroy(void *data)
 	bfree(context);
 }
 
+void win_spout_filter_remove(void *data, obs_source_t *parent)
+{
+	struct win_spout_filter *context = (win_spout_filter *)data;
+
+	if (context->showing_held) {
+		obs_source_dec_showing(parent);
+		context->showing_held = false;
+	}
+}
+
 void win_spout_filter_tick(void *data, float seconds)
 {
 	UNUSED_PARAMETER(seconds);
 	struct win_spout_filter *context = (win_spout_filter *)data;
+
+	// OBS stops rendering sources that aren't shown anywhere. In continuous mode,
+	// hold a showing ref on the parent so it keeps rendering off-screen. This tick
+	// also drops the ref when the option or the filter is turned off.
+	obs_source_t *parent = obs_filter_get_parent(context->source_context);
+	if (!parent) {
+		return;
+	}
+
+	const bool want_showing = win_spout_config::get()->continuous_broadcast &&
+				  obs_source_enabled(context->source_context);
+
+	if (want_showing && !context->showing_held) {
+		obs_source_inc_showing(parent);
+		context->showing_held = true;
+	} else if (!want_showing && context->showing_held) {
+		obs_source_dec_showing(parent);
+		context->showing_held = false;
+	}
 }
 
 void win_spout_filter_videorender(void *data, gs_effect_t *effect)
@@ -380,6 +454,7 @@ struct obs_source_info create_spout_filter_info()
 	win_spout_filter_info.update = win_spout_filter_update;
 	win_spout_filter_info.video_tick = win_spout_filter_tick;
 	win_spout_filter_info.video_render = win_spout_filter_videorender;
+	win_spout_filter_info.filter_remove = win_spout_filter_remove;
 
 	return win_spout_filter_info;
 }

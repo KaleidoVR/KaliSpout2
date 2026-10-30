@@ -1,0 +1,11 @@
+1.14.1
+
+I built this for OBS Studio 33. The installer puts KaliSpout2 in ProgramData\obs-studio\plugins\win-spout, with the DLLs next to the data folder. It removes an older copy from bin\64bit and from Program Files.
+
+UI — Settings, Hotkeys lists Start Spout Output and Stop Spout Output. Each Spout filter gets Enable and Disable there too.
+
+Spout2 Capture keeps the right brightness on a 10-bit or HDR canvas. After sleep, the Spout output comes back on its own. A continuous Spout filter keeps sending when its source is off the current scene. Changing profile stops the sender and starts it again on the canvas you picked.
+
+The canvas list, the KaleidoVR menu, and Auto Start stay as they are. Auto Start stays off unless you already checked it.
+
+Portable OBS: extract the portable zip into the OBS folder. You should see plugins\win-spout\win-spout.dll. Delete the old files in obs-plugins\64bit.

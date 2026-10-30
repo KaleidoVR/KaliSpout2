@@ -11,8 +11,7 @@
 #include <util/threading.h>
 #include "win-spout.h"
 
-#include "SpoutLibrary.h"
-#pragma comment(lib, "SpoutLibrary.lib")
+#include "SpoutDX.h"
 
 #define debug(message, ...) blog(LOG_DEBUG, "[%s] " message, obs_source_get_name(context->source), ##__VA_ARGS__)
 #define info(message, ...) blog(LOG_INFO, "[%s] " message, obs_source_get_name(context->source), ##__VA_ARGS__)
@@ -28,142 +27,264 @@
 #define COMPOSITE_MODE_DEFAULT 3
 #define COMPOSITE_MODE_PREMULTIPLIED 4
 
+// Placeholder size reported until a sender is connected.
+#define PLACEHOLDER_SIZE 100
+
+/*
+ * Receiving is done with a spoutDX receiver on OBS's own D3D11 device, the same way the
+ * filter sends. spoutDX::ReceiveTexture() copies the sender's shared texture into a texture
+ * we own, under Spout's access mutex (keyed mutex or named mutex, whichever the sender uses)
+ * and only when the sender has produced a new frame. Reading the shared texture directly, as
+ * earlier versions did, was unsynchronised and could tear or read half-rendered frames (#86).
+ *
+ * All Spout and texture work happens on the graphics thread in video_tick; update/show/hide
+ * only set flags that the next tick acts on.
+ */
 struct spout_source {
 	obs_source_t *source;
+	spoutDX *receiver;
+
+	// Settings (written by update() on the UI thread, read in tick)
 	char senderName[256];
 	bool useFirstSender;
-	gs_texture_t *texture;
-	HANDLE dxHandle;
-	DWORD dxFormat;
-	ULONGLONG lastCheckTick;
-	int width;
-	int height;
-	bool initialized;
 	ULONGLONG tick_speed_limit;
 	ULONGLONG composite_mode;
+	volatile bool pending_reconnect; // settings changed: release and reconnect
+
+	// Graphics-thread state
+	bool dx_initialised;
+	gs_texture_t *texture; // our copy of the sender texture, same DXGI format family
+	gs_texrender_t *linear_texrender;
+	int width;
+	int height;
+	ULONGLONG lastCheckTick;
 	int spout_status;
 	int render_status;
-	int tick_status;
-	int sender_info_fail_count;
-	bool pending_reset;
-	SPOUTHANDLE spout_receiver_ptr;
-	pthread_mutex_t mutex;
 };
 
-/**
- * Writes sender texture details (width & height) to the context
- * @return bool success
- */
-static bool win_spout_source_store_sender_info(spout_source *context)
+static gs_color_format gs_format_for_dxgi(DXGI_FORMAT format)
 {
-	unsigned int width, height;
-	// get info about this active sender:
-	if (!context->spout_receiver_ptr->GetSenderInfo(context->senderName, width, height, context->dxHandle,
-							context->dxFormat)) {
+	switch (format) {
+	case DXGI_FORMAT_B8G8R8A8_UNORM:
+	case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+	case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+	case DXGI_FORMAT_B8G8R8X8_UNORM:
+	case DXGI_FORMAT_B8G8R8X8_UNORM_SRGB:
+	case DXGI_FORMAT_B8G8R8X8_TYPELESS:
+		return GS_BGRA; // typeless + sRGB view, CopyResource-compatible with the UNORM sender
+	case DXGI_FORMAT_R8G8B8A8_UNORM:
+	case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+	case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+		return GS_RGBA;
+	case DXGI_FORMAT_R16G16B16A16_FLOAT:
+	case DXGI_FORMAT_R16G16B16A16_TYPELESS:
+		return GS_RGBA16F;
+	case DXGI_FORMAT_R16G16B16A16_UNORM:
+		return GS_RGBA16;
+	case DXGI_FORMAT_R10G10B10A2_UNORM:
+	case DXGI_FORMAT_R10G10B10A2_TYPELESS:
+		return GS_R10G10B10A2;
+	case DXGI_FORMAT_R32G32B32A32_FLOAT:
+	case DXGI_FORMAT_R32G32B32A32_TYPELESS:
+		return GS_RGBA32F;
+	default:
+		return GS_UNKNOWN;
+	}
+}
+
+// Names for the DXGI formats Spout senders commonly use. DirectX 9 senders
+// report 0, and their texture is always D3DFMT_A8R8G8B8.
+static const char *win_spout_format_name(DWORD format)
+{
+	switch (format) {
+	case 0:
+		return "DirectX 9 sender (8-bit BGRA)";
+	case 10:
+		return "R16G16B16A16_FLOAT (16-bit float)";
+	case 11:
+		return "R16G16B16A16_UNORM (16-bit)";
+	case 24:
+		return "R10G10B10A2_UNORM (10-bit)";
+	case 28:
+		return "R8G8B8A8_UNORM (8-bit)";
+	case 87:
+		return "B8G8R8A8_UNORM (8-bit)";
+	case 91:
+		return "B8G8R8A8_UNORM_SRGB (8-bit)";
+	default:
+		return "unrecognised";
+	}
+}
+
+static void win_spout_source_log_once(spout_source *context, int status, int level, const char *message)
+{
+	if (context->spout_status == status) {
+		return;
+	}
+	context->spout_status = status;
+	blog(level, "[%s] %s", obs_source_get_name(context->source), message);
+}
+
+static void win_spout_source_release_texture(spout_source *context)
+{
+	if (context->texture || context->linear_texrender) {
+		obs_enter_graphics();
+		gs_texture_destroy(context->texture);
+		gs_texrender_destroy(context->linear_texrender);
+		obs_leave_graphics();
+		context->texture = NULL;
+		context->linear_texrender = NULL;
+	}
+	context->width = context->height = PLACEHOLDER_SIZE;
+}
+
+// Graphics thread only.
+static void win_spout_source_disconnect(spout_source *context)
+{
+	if (context->receiver) {
+		context->receiver->ReleaseReceiver();
+	}
+	win_spout_source_release_texture(context);
+}
+
+// Graphics thread only: share OBS's D3D11 device with the receiver.
+static bool win_spout_source_init_dx(spout_source *context)
+{
+	if (context->dx_initialised) {
+		return true;
+	}
+
+	ID3D11Device *const d3d_device = (ID3D11Device *)gs_get_device_obj();
+	if (!d3d_device) {
+		win_spout_source_log_once(context, -1, LOG_ERROR, "Failed to retrieve the OBS D3D11 device");
 		return false;
 	}
 
-	context->width = width;
-	context->height = height;
+	context->receiver->SetMaxSenders(255);
+	if (!context->receiver->OpenDirectX11(d3d_device)) {
+		win_spout_source_log_once(context, -2, LOG_ERROR, "Failed to open DX11 for the Spout receiver");
+		return false;
+	}
+
+	context->dx_initialised = true;
 	return true;
 }
 
-static void win_spout_source_init(void *data, bool forced = false)
+// Graphics thread only: (re)create our texture to match the connected sender.
+static bool win_spout_source_create_texture(spout_source *context)
 {
-	struct spout_source *context = (spout_source *)data;
-	if (context->initialized) {
-		context->spout_status = 0;
-		return;
+	spoutDX *receiver = context->receiver;
+	const unsigned int width = receiver->GetSenderWidth();
+	const unsigned int height = receiver->GetSenderHeight();
+	const DXGI_FORMAT dxgi_format = receiver->GetSenderFormat();
+
+	win_spout_source_release_texture(context);
+
+	if (width == 0 || height == 0) {
+		return false;
 	}
 
-	ULONG64 tickDelta = GetTickCount64() - context->lastCheckTick;
-
-	if (tickDelta < context->tick_speed_limit && !forced) {
-		return;
+	gs_color_format format = gs_format_for_dxgi(dxgi_format);
+	if (format == GS_UNKNOWN) {
+		if (context->spout_status != -9) {
+			warn("Sender %s uses an unsupported texture format (DXGI format %d)", receiver->GetSenderName(),
+			     (int)dxgi_format);
+			context->spout_status = -9;
+		}
+		return false;
 	}
-	context->lastCheckTick = GetTickCount64();
-
-	if (context->spout_receiver_ptr == NULL) {
-		if (context->spout_status != -1) {
-			warn("Spout pointer didn't exist");
-			context->spout_status = -1;
-		}
-		return;
-	}
-
-	int totalSenders = context->spout_receiver_ptr->GetSenderCount();
-
-	if (totalSenders == 0) {
-		if (context->spout_status != -2) {
-			debug("No active Spout cameras");
-			context->spout_status = -2;
-		}
-		return;
-	}
-
-	if (context->useFirstSender) {
-		if (context->spout_receiver_ptr->GetSender(0, context->senderName)) {
-			// Do not call SetActiveSender: that mutates global Spout state and
-			// races when the same source is drawn on additional OBS canvases.
-		} else {
-			if (context->spout_status != -3) {
-				info("Strange , there is a sender without name ?");
-				context->spout_status = -3;
-			}
-			return;
-		}
-	} else {
-		int index;
-		char senderName[256];
-		bool exists = false;
-		// then get the name of each sender from SPOUT
-		for (index = 0; index < totalSenders; index++) {
-			context->spout_receiver_ptr->GetSender(index, senderName);
-			if (strcmp(senderName, context->senderName) == 0) {
-				exists = true;
-				break;
-			}
-		}
-		if (!exists) {
-			if (context->spout_status != -5) {
-				debug("Sorry, Sender Name %s not found", context->senderName);
-				context->spout_status = -5;
-			}
-			return;
-		} else {
-			context->spout_status = 0;
-		}
-	}
-
-	debug("Getting info for sender %s", context->senderName);
-	if (!win_spout_source_store_sender_info(context)) {
-		warn("Named %s sender not found", context->senderName);
-	} else {
-		debug("Sender %s is of dimensions %d x %d", context->senderName, context->width, context->height);
-	};
 
 	obs_enter_graphics();
-	gs_texture_t *old_tex = context->texture;
-	context->texture = gs_texture_open_shared((uint32_t)(uintptr_t)context->dxHandle);
-	if (old_tex) {
-		gs_texture_destroy(old_tex);
-	}
+	context->texture = gs_texture_create(width, height, format, 1, NULL, 0);
 	obs_leave_graphics();
 
-	context->sender_info_fail_count = 0;
-	context->initialized = true;
+	if (!context->texture) {
+		if (context->spout_status != -10) {
+			warn("Failed to create a %ux%u receiving texture for sender %s", width, height,
+			     receiver->GetSenderName());
+			context->spout_status = -10;
+		}
+		return false;
+	}
+
+	context->width = (int)width;
+	context->height = (int)height;
+	info("Sender %s is of dimensions %u x %u, format %lu: %s", receiver->GetSenderName(), width, height,
+	     (unsigned long)dxgi_format, win_spout_format_name((DWORD)dxgi_format));
+	context->spout_status = 0;
+	return true;
 }
 
-static void win_spout_source_deinit(void *data)
+// Graphics thread only: connect/poll the sender and copy the latest frame into our texture.
+static void win_spout_source_receive(spout_source *context)
 {
-	struct spout_source *context = (spout_source *)data;
-	context->initialized = false;
-	gs_texture_t *tex = context->texture;
-	context->texture = NULL;
-	if (tex) {
-		obs_enter_graphics();
-		gs_texture_destroy(tex);
-		obs_leave_graphics();
+	spoutDX *receiver = context->receiver;
+
+	if (!win_spout_source_init_dx(context)) {
+		return;
+	}
+
+	if (context->pending_reconnect) {
+		os_atomic_set_bool(&context->pending_reconnect, false);
+		win_spout_source_disconnect(context);
+		// An empty name makes spoutDX follow the active sender ("first available").
+		receiver->SetReceiverName(context->useFirstSender ? nullptr : context->senderName);
+		context->lastCheckTick = 0;
+	}
+
+	// While not connected, only look for senders at the configured poll interval.
+	if (!receiver->IsConnected()) {
+		const ULONGLONG now = GetTickCount64();
+		if (now - context->lastCheckTick < context->tick_speed_limit) {
+			return;
+		}
+		context->lastCheckTick = now;
+
+		if (receiver->GetSenderCount() == 0) {
+			win_spout_source_disconnect(context);
+			win_spout_source_log_once(context, -3, LOG_INFO, "No active Spout senders");
+			return;
+		}
+	}
+
+	ID3D11Texture2D *dst = context->texture ? (ID3D11Texture2D *)gs_texture_get_obj(context->texture) : nullptr;
+	const bool connected = receiver->ReceiveTexture(&dst);
+
+	if (!connected) {
+		const bool had_texture = context->texture != NULL;
+		// ReceiveTexture() fails with the share handle still set only when the sender exists but
+		// OpenSharedResource failed on our device; read it before the disconnect resets it.
+		// (GetSenderTexture() is no test: it is NULL until a frame has been copied.)
+		const bool handle_unopened = receiver->GetSenderHandle() != nullptr;
+		win_spout_source_disconnect(context);
+
+		if (handle_unopened) {
+			// spoutDX found the sender but could not open its share handle on our device.
+			if (context->spout_status != -8) {
+				warn("Could not open the shared texture of sender %s. This usually means the sender is "
+				     "running on a different GPU than OBS: in Windows Settings > System > Display > "
+				     "Graphics set both OBS and the sender to the same GPU, then restart the sender.",
+				     context->useFirstSender ? "(first available)" : context->senderName);
+				context->spout_status = -8;
+			}
+		} else if (had_texture) {
+			info("Sender %s has gone away",
+			     context->useFirstSender ? "(first available)" : context->senderName);
+			context->spout_status = -4;
+		} else if (!context->useFirstSender) {
+			if (context->spout_status != -5) {
+				info("Sender %s not found", context->senderName);
+				context->spout_status = -5;
+			}
+		}
+		return;
+	}
+
+	// New sender, or the sender's size/format changed: rebuild our texture, the next
+	// ReceiveTexture() call copies into it. spoutDX only reports an update once the sender's
+	// shared texture has been opened on our device.
+	if (receiver->IsUpdated()) {
+		win_spout_source_create_texture(context);
 	}
 }
 
@@ -177,19 +298,14 @@ static void win_spout_source_update(void *data, obs_data_t *settings)
 		context->useFirstSender = true;
 	} else {
 		context->useFirstSender = false;
-		memset(context->senderName, 0, 256);
-		strcpy(context->senderName, selectedSender);
+		memset(context->senderName, 0, sizeof(context->senderName));
+		strncpy(context->senderName, selectedSender, sizeof(context->senderName) - 1);
 	}
 
-	auto selectedSpeed = obs_data_get_int(settings, SPOUT_TICK_SPEED_LIMIT);
-	context->tick_speed_limit = selectedSpeed;
+	context->tick_speed_limit = obs_data_get_int(settings, SPOUT_TICK_SPEED_LIMIT);
+	context->composite_mode = obs_data_get_int(settings, SPOUT_COMPOSITE_MODE);
 
-	auto compositeMode = obs_data_get_int(settings, SPOUT_COMPOSITE_MODE);
-	context->composite_mode = compositeMode;
-
-	if (context->initialized) {
-		context->pending_reset = true;
-	}
+	os_atomic_set_bool(&context->pending_reconnect, true);
 }
 
 static const char *win_spout_source_get_name(void *unused)
@@ -203,23 +319,11 @@ static const char *win_spout_source_get_name(void *unused)
 static void *win_spout_source_create(obs_data_t *settings, obs_source_t *source)
 {
 	struct spout_source *context = (spout_source *)bzalloc(sizeof(spout_source));
-	context->spout_receiver_ptr = GetSpout();
 	context->source = source;
-	// Name may still be unset during create; keep this at debug to avoid [(null)] info spam (#89).
-	debug("initialising spout source");
+	info("initialising spout source");
+	context->receiver = new spoutDX;
 	context->useFirstSender = true;
-	context->initialized = false;
-	context->tick_speed_limit = 0;
-	context->texture = NULL;
-	context->dxHandle = NULL;
-	context->sender_info_fail_count = 0;
-	context->pending_reset = false;
-	pthread_mutex_init_value(&context->mutex);
-	pthread_mutex_init(&context->mutex, NULL);
-
-	// set the initial size as 100x100 until we
-	// have the actual dimensions from SPOUT
-	context->width = context->height = 100;
+	context->width = context->height = PLACEHOLDER_SIZE;
 
 	win_spout_source_update(context, settings);
 	return context;
@@ -229,37 +333,30 @@ static void win_spout_source_destroy(void *data)
 {
 	struct spout_source *context = (spout_source *)data;
 
-	win_spout_source_deinit(data);
-
-	if (context->spout_receiver_ptr != NULL) {
-		context->spout_receiver_ptr->Release();
-		context->spout_receiver_ptr = nullptr;
+	if (context->receiver) {
+		context->receiver->ReleaseReceiver();
+		context->receiver->CloseDirectX11();
+		delete context->receiver;
+		context->receiver = nullptr;
 	}
+	win_spout_source_release_texture(context);
 
-	pthread_mutex_destroy(&context->mutex);
 	bfree(context);
 }
 
 static void win_spout_source_defaults(obs_data_t *settings)
 {
 	obs_data_set_default_string(settings, SPOUT_SENDER_LIST, USE_FIRST_AVAILABLE_SENDER);
-	obs_data_set_default_int(settings, "tickspeedlimit", 100);
+	obs_data_set_default_int(settings, SPOUT_TICK_SPEED_LIMIT, 100);
+	// Without a default the combo box showed nothing selected while rendering opaque
+	// (the switch's fallback); make that explicit so the UI matches the behaviour.
+	obs_data_set_default_int(settings, SPOUT_COMPOSITE_MODE, COMPOSITE_MODE_OPAQUE);
 }
 
 static void win_spout_source_show(void *data)
 {
-	win_spout_source_init(data, true); // When showing do forced init without delay
-}
-
-static void win_spout_source_hide(void *data)
-{
 	struct spout_source *context = (spout_source *)data;
-	// Additional canvases can hide the source on one mix while it is still
-	// shown on another. Only tear down GPU resources when nothing is showing.
-	if (context->source && obs_source_showing(context->source)) {
-		return;
-	}
-	win_spout_source_deinit(data);
+	context->lastCheckTick = 0; // look for the sender immediately
 }
 
 static uint32_t win_spout_source_getwidth(void *data)
@@ -274,35 +371,62 @@ static uint32_t win_spout_source_getheight(void *data)
 	return context->height;
 }
 
+/**
+ * On 10-bit and HDR canvases OBS blends in linear space, but the received texture
+ * holds sRGB values, so decode it into a 16F texture first. premultiplied_alpha.effect
+ * has no DrawSrgbDecompress technique, which is why this isn't done in the draw call
+ * itself.
+ */
+static gs_texture_t *win_spout_source_linearize(spout_source *context)
+{
+	const enum gs_color_space space = gs_get_color_space();
+	if (space == GS_CS_SRGB)
+		return context->texture; // sRGB canvas, no decode needed
+
+	const enum gs_color_format format = gs_texture_get_color_format(context->texture);
+	if (format == GS_RGBA16F || format == GS_RGBA32F)
+		return context->texture; // float senders are already linear
+
+	const char *tech_name = "DrawSrgbDecompress";
+	float multiplier = 1.0f;
+	if (space == GS_CS_709_SCRGB) {
+		tech_name = "DrawSrgbDecompressMultiply";
+		multiplier = obs_get_video_sdr_white_level() / 80.0f;
+	}
+
+	if (!context->linear_texrender)
+		context->linear_texrender = gs_texrender_create(GS_RGBA16F, GS_ZS_NONE);
+	if (!context->linear_texrender)
+		return context->texture;
+
+	const uint32_t cx = gs_texture_get_width(context->texture);
+	const uint32_t cy = gs_texture_get_height(context->texture);
+
+	gs_texrender_reset(context->linear_texrender);
+	if (!gs_texrender_begin(context->linear_texrender, cx, cy))
+		return context->texture;
+
+	gs_effect_t *const conv = obs_get_base_effect(OBS_EFFECT_DEFAULT);
+	const bool previous_srgb = gs_framebuffer_srgb_enabled();
+	gs_enable_framebuffer_srgb(false);
+	gs_enable_blending(false);
+	gs_ortho(0.0f, (float)cx, 0.0f, (float)cy, -100.0f, 100.0f);
+	gs_effect_set_texture(gs_effect_get_param_by_name(conv, "image"), context->texture);
+	gs_effect_set_float(gs_effect_get_param_by_name(conv, "multiplier"), multiplier);
+	while (gs_effect_loop(conv, tech_name))
+		gs_draw_sprite(context->texture, 0, 0, 0);
+	gs_enable_blending(true);
+	gs_enable_framebuffer_srgb(previous_srgb);
+	gs_texrender_end(context->linear_texrender);
+
+	return gs_texrender_get_texture(context->linear_texrender);
+}
+
 static void win_spout_source_render(void *data, gs_effect_t *effect)
 {
 	struct spout_source *context = (spout_source *)data;
 
-	if (context->pending_reset) {
-		context->pending_reset = false;
-		win_spout_source_deinit(data);
-		win_spout_source_init(data, true);
-	}
-
-	// Do not force-init every render: with multiple canvases video_render runs
-	// once per mix and was re-opening shared textures / spamming the log (#89).
-	if (!context->initialized) {
-		win_spout_source_init(data, false);
-		if (!context->initialized) {
-			if (context->render_status != -1) {
-				debug("uninit'd");
-				context->render_status = -1;
-			}
-			return;
-		}
-	}
-
-	pthread_mutex_lock(&context->mutex);
-	gs_texture_t *texture = context->texture;
-	const ULONGLONG composite_mode = context->composite_mode;
-	pthread_mutex_unlock(&context->mutex);
-
-	if (!texture) {
+	if (!context->texture) {
 		if (context->render_status != -2) {
 			debug("no texture");
 			context->render_status = -2;
@@ -315,7 +439,7 @@ static void win_spout_source_render(void *data, gs_effect_t *effect)
 		context->render_status = 0;
 	}
 
-	switch (composite_mode) {
+	switch (context->composite_mode) {
 	case COMPOSITE_MODE_OPAQUE:
 		effect = obs_get_base_effect(OBS_EFFECT_OPAQUE);
 		break;
@@ -337,72 +461,15 @@ static void win_spout_source_render(void *data, gs_effect_t *effect)
 		break;
 	}
 
+	gs_texture_t *const texture = win_spout_source_linearize(context);
+
 	while (gs_effect_loop(effect, "Draw")) {
 		obs_source_draw(texture, 0, 0, 0, 0, false);
 	}
 
-	if (composite_mode == COMPOSITE_MODE_PREMULTIPLIED) {
+	if (context->composite_mode == COMPOSITE_MODE_PREMULTIPLIED) {
 		gs_blend_state_pop();
 	}
-}
-
-static bool win_spout_sender_exists(spout_source *context)
-{
-	if (!context->spout_receiver_ptr) {
-		return false;
-	}
-	int totalSenders = context->spout_receiver_ptr->GetSenderCount();
-	char senderName[256];
-	for (int index = 0; index < totalSenders; index++) {
-		if (!context->spout_receiver_ptr->GetSender(index, senderName)) {
-			continue;
-		}
-		if (strcmp(senderName, context->senderName) == 0) {
-			return true;
-		}
-	}
-	return false;
-}
-
-/**
- * Updates sender texture details on the context
- * and works out whether any of this data has changed
- *
- * @return bool sender data has changed
- */
-static bool win_spout_sender_has_changed(spout_source *context)
-{
-	if (!win_spout_sender_exists(context)) {
-		if (!context->initialized) {
-			return false;
-		}
-		// Extra canvases can briefly report no senders while the shared
-		// texture is still valid. Require several misses before reset (#89).
-		context->sender_info_fail_count++;
-		if (context->sender_info_fail_count < 8) {
-			return false;
-		}
-		return true;
-	}
-
-	DWORD oldFormat = context->dxFormat;
-	auto oldWidth = context->width;
-	auto oldHeight = context->height;
-
-	if (!win_spout_source_store_sender_info(context)) {
-		// GetSenderInfo can fail transiently when extra canvases are rendering
-		// the same shared texture. Do not tear down on a single miss.
-		context->sender_info_fail_count++;
-		if (context->sender_info_fail_count < 8) {
-			return false;
-		}
-		return true;
-	}
-	context->sender_info_fail_count = 0;
-	if (context->width != oldWidth || context->height != oldHeight || oldFormat != context->dxFormat) {
-		return true;
-	}
-	return false;
 }
 
 static void win_spout_source_tick(void *data, float seconds)
@@ -411,40 +478,23 @@ static void win_spout_source_tick(void *data, float seconds)
 
 	struct spout_source *context = (spout_source *)data;
 
-	pthread_mutex_lock(&context->mutex);
-	bool changed = win_spout_sender_has_changed(context);
-	pthread_mutex_unlock(&context->mutex);
-
-	if (changed) {
-		// Demote to debug: with multiple canvases this used to flood the log
-		// even when the sender was only briefly unreachable (#89).
-		if (context->tick_status != -1) {
-			debug("Sender %s has changed / gone away. Resetting", context->senderName);
-			context->tick_status = -1;
-		}
-		context->pending_reset = true;
-		return;
-	}
-	if (!context->initialized) {
-		if (context->tick_status != -2) {
-			context->tick_status = -2;
-		}
-		// Poll with tick_speed_limit instead of forcing a reset every frame.
-		win_spout_source_init(data, false);
-	}
-	if (context->initialized && context->tick_status != 0) {
-		context->tick_status = 0;
-	}
+	// Receive regardless of visibility (earlier versions re-initialised on the next tick
+	// after hide() anyway), so switching to a scene with this source never shows a black
+	// frame while it reconnects. video_tick runs on the graphics thread but outside the
+	// graphics context, where gs_get_device_obj() returns NULL, so enter it here.
+	obs_enter_graphics();
+	win_spout_source_receive(context);
+	obs_leave_graphics();
 }
 
-static void fill_senders(SPOUTHANDLE spoutptr, obs_property_t *list)
+static void fill_senders(spoutDX *receiver, obs_property_t *list)
 {
 	// clear the list first
 	obs_property_list_clear(list);
 
 	// first option in the list should be "Take whatever is available"
 	obs_property_list_add_string(list, obs_module_text("usefirstavailablesender"), USE_FIRST_AVAILABLE_SENDER);
-	int totalSenders = spoutptr->GetSenderCount();
+	int totalSenders = receiver->GetSenderCount();
 	if (totalSenders == 0) {
 		return;
 	}
@@ -452,8 +502,9 @@ static void fill_senders(SPOUTHANDLE spoutptr, obs_property_t *list)
 	char senderName[256];
 	// then get the name of each sender from SPOUT
 	for (index = 0; index < totalSenders; index++) {
-		spoutptr->GetSender(index, senderName);
-		obs_property_list_add_string(list, senderName, senderName);
+		if (receiver->GetSender(index, senderName, (int)sizeof(senderName))) {
+			obs_property_list_add_string(list, senderName, senderName);
+		}
 	}
 }
 
@@ -467,7 +518,7 @@ static obs_properties_t *win_spout_properties(void *data)
 	obs_property_t *sender_list = obs_properties_add_list(props, SPOUT_SENDER_LIST, obs_module_text("spoutsenders"),
 							      OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
 
-	fill_senders(context->spout_receiver_ptr, sender_list);
+	fill_senders(context->receiver, sender_list);
 
 	obs_property_t *composite_mode_list = obs_properties_add_list(props, SPOUT_COMPOSITE_MODE,
 								      obs_module_text("compositemode"),
@@ -501,7 +552,6 @@ struct obs_source_info create_spout_source_info()
 	spout_source_info.update = win_spout_source_update;
 	spout_source_info.get_defaults = win_spout_source_defaults;
 	spout_source_info.show = win_spout_source_show;
-	spout_source_info.hide = win_spout_source_hide;
 	spout_source_info.get_width = win_spout_source_getwidth;
 	spout_source_info.get_height = win_spout_source_getheight;
 

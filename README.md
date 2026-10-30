@@ -6,7 +6,7 @@
 
 **KaliSpout2** is the [KaleidoVR](https://github.com/KaleidoVR) OBS Studio plugin for Spout2 shared-texture input and output.
 
-Share GPU textures with [Spout2](https://github.com/leadedge/Spout2)-compatible apps, with support for **OBS Studio 32.2.2+** multi-canvas setups used by Aitum Stream Suite and Aitum Vertical.
+Share GPU textures with [Spout2](https://github.com/leadedge/Spout2)-compatible apps, with support for **OBS Studio 33+** multi-canvas setups used by Aitum Stream Suite and Aitum Vertical.
 
 ## Features
 - One Spout sender, bound to a chosen OBS canvas (including Aitum extra canvases)
@@ -16,7 +16,7 @@ Share GPU textures with [Spout2](https://github.com/leadedge/Spout2)-compatible 
 - Auto-start is opt-in, cleared on upgrade, and retries when the selected canvas appears after load
 - Load log prints **Version** and this repo URL for easy install checks
 
-## OBS 32.2+ canvases
+## OBS 33 canvases
 Open **KaleidoVR → KaliSpout2 Output Settings**. Choose which frontend canvas to send (Aitum canvases). The output uses `obs_output_set_media` on that canvas mix so BGRA conversion does not black out other canvases. Only one sender is active at a time; changing the canvas dropdown while running switches the live sender.
 
 <p align="center">
@@ -27,14 +27,16 @@ Open **KaleidoVR → KaliSpout2 Output Settings**. Choose which frontend canvas 
 1. Close OBS Studio.
 2. Download the latest Windows installer from [Releases](https://github.com/KaleidoVR/KaliSpout2/releases).
 3. Run `KaliSpout2_Install_v*.exe`.
-4. Default path: `C:\ProgramData\obs-studio\plugins\win-spout` (same folder as the original Spout 2 OBS Plugin).
+4. Default path: `C:\ProgramData\obs-studio\plugins\win-spout\`. The DLLs sit next to the `data` folder. OBS 33 treats the old `bin\64bit` layout as legacy.
 5. Restart OBS, then open **KaleidoVR → KaliSpout2 Output Settings**.
 
-The installer **replaces** an existing Spout 2 OBS Plugin install in that folder and removes the old Apps & Features entry / Start Menu uninstall shortcut, so you do not need to uninstall Spout first. Only one `win-spout` plugin can be loaded at a time.
+Portable OBS: extract the portable zip into the OBS folder so you get `plugins\win-spout\win-spout.dll`. Delete any older copy in `obs-plugins\64bit` and `data\obs-plugins\win-spout`.
+
+The installer replaces an existing Spout 2 OBS Plugin in the `win-spout` folder, removes leftover files from `bin\64bit` and from `C:\Program Files\obs-studio\obs-plugins\64bit`, and removes the old Apps & Features entry. Only one `win-spout` plugin can be loaded at a time. It requires OBS Studio 33 or newer.
 
 ## Requirements
 - Windows x64
-- OBS Studio **32.2.2+** (multi-canvas / Aitum)
+- OBS Studio **33+** (multi-canvas / Aitum)
 
 ## Building
 ```

@@ -69,7 +69,7 @@ function Package {
     $SpoutBinariesDir = "${ProjectRoot}/deps/Spout2/BUILD/Binaries/x64"
     $SpoutRuntimeDlls = @('Spout.dll', 'SpoutDX.dll', 'SpoutLibrary.dll')
     foreach ( $Dll in $SpoutRuntimeDlls ) {
-        Copy-Item -Path "${SpoutBinariesDir}/${Dll}" -Destination "${InstallRoot}/bin/64bit/${Dll}" -Force
+        Copy-Item -Path "${SpoutBinariesDir}/${Dll}" -Destination "${InstallRoot}/${Dll}" -Force
     }
 
     Log-Group "Archiving ${ProductName}..."
@@ -81,20 +81,13 @@ function Package {
     }
     Compress-Archive -Force @CompressArgs
 
-    # Traditional portable layout: re-arrange <plugin>/bin/64bit and <plugin>/data into
-    # obs-plugins/64bit and data/obs-plugins/<plugin> so the archive can be extracted
-    # straight onto an OBS install.
+    # Portable layout (OBS 33+): plugins/<plugin>/<plugin>.dll and plugins/<plugin>/data.
     Log-Group "Archiving ${ProductName} portable layout..."
-    $PortableBinPath = "${PortableRoot}/obs-plugins/64bit"
-    $PortableDataPath = "${PortableRoot}/data/obs-plugins/${ProductName}"
+    $PortablePluginsPath = "${PortableRoot}/plugins"
 
-    New-Item -Path $PortableBinPath -ItemType Directory -Force | Out-Null
-    New-Item -Path $PortableDataPath -ItemType Directory -Force | Out-Null
+    New-Item -Path $PortablePluginsPath -ItemType Directory -Force | Out-Null
 
-    Copy-Item -Path "${InstallRoot}/bin/64bit/*" -Destination $PortableBinPath -Recurse -Force
-    if ( Test-Path "${InstallRoot}/data" ) {
-        Copy-Item -Path "${InstallRoot}/data/*" -Destination $PortableDataPath -Recurse -Force
-    }
+    Copy-Item -Path $InstallRoot -Destination $PortablePluginsPath -Recurse -Force
 
     $PortableCompressArgs = @{
         Path = (Get-ChildItem -Path $PortableRoot)

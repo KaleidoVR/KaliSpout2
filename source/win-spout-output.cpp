@@ -10,6 +10,7 @@
 #include <obs-module.h>
 #include <util/threading.h>
 #include <media-io/video-io.h>
+#include <cstring>
 #include "win-spout.h"
 
 #include "SpoutDX.h"
@@ -17,8 +18,11 @@
 struct spout_output {
 	spoutDX *sender;
 	obs_output_t *output;
-	const char *senderName;
+	// Owned copy: the obs_data string handed to update() is freed when the settings change.
+	char senderName[256];
 	bool output_started;
+	// Set once a lost device has been reported, so a failing recreate is only logged once.
+	bool device_lost;
 	// mutex guards accesses to rest of context variables,
 	// and any methods on spoutDX* sender.
 	// Calling obs methods on obs_output_t* output seems thread-safe.
@@ -46,6 +50,39 @@ bool init_spout(void *data)
 	return true;
 }
 
+// The output sends from its own D3D11 device. Sleep/resume or a driver reset can remove
+// that device; spoutDX::SendImage() still returns true on a removed device and never
+// recreates it, so the output sent nothing until OBS was restarted. OBS rebuilds its
+// own device, so do the same for ours. Call with the mutex held.
+static bool ensure_device(spout_output *context)
+{
+	ID3D11Device *device = context->sender->GetDX11Device();
+	const HRESULT reason = device ? device->GetDeviceRemovedReason() : DXGI_ERROR_DEVICE_REMOVED;
+	if (reason == S_OK) {
+		return true;
+	}
+
+	if (!context->device_lost) {
+		blog(LOG_WARNING, "Spout output lost its D3D11 device (0x%08lX), recreating it", (unsigned long)reason);
+	}
+
+	context->sender->ReleaseSender();
+	context->sender->CloseDirectX11();
+	context->sender->OpenDirectX11();
+	if (!context->sender->GetDX11Device()) {
+		if (!context->device_lost) {
+			blog(LOG_ERROR, "Failed to recreate the Spout output D3D11 device, will retry");
+		}
+		context->device_lost = true;
+		return false;
+	}
+
+	context->sender->SetSenderName(context->senderName);
+	context->device_lost = false;
+	blog(LOG_INFO, "Recreated the Spout output D3D11 device");
+	return true;
+}
+
 static const char *win_spout_output_get_name(void *unused)
 {
 	UNUSED_PARAMETER(unused);
@@ -55,15 +92,18 @@ static const char *win_spout_output_get_name(void *unused)
 static void win_spout_output_update(void *data, obs_data_t *settings)
 {
 	spout_output *context = (spout_output *)data;
-	context->senderName = obs_data_get_string(settings, "senderName");
+	pthread_mutex_lock(&context->mutex);
+	strncpy(context->senderName, obs_data_get_string(settings, "senderName"), sizeof(context->senderName) - 1);
+	context->senderName[sizeof(context->senderName) - 1] = '\0';
+	pthread_mutex_unlock(&context->mutex);
 }
 
 static void *win_spout_output_create(obs_data_t *settings, obs_output_t *output)
 {
 	spout_output *context = (spout_output *)bzalloc(sizeof(spout_output));
 	context->output = output;
-	context->senderName = obs_data_get_string(settings, "senderName");
 	context->output_started = false;
+	context->device_lost = false;
 	context->sender = new spoutDX;
 
 	pthread_mutex_init_value(&context->mutex);
@@ -114,6 +154,7 @@ bool win_spout_output_start(void *data)
 
 	pthread_mutex_lock(&context->mutex);
 
+	ensure_device(context);
 	context->sender->SetSenderName(context->senderName);
 
 	obs_output_t *output = context->output;
@@ -215,7 +256,7 @@ void win_spout_output_rawvideo(void *data, struct video_data *frame)
 
 	pthread_mutex_lock(&context->mutex);
 
-	if (frame && frame->data[0]) {
+	if (frame && frame->data[0] && ensure_device(context)) {
 		context->sender->SendImage(frame->data[0], width, height);
 	}
 

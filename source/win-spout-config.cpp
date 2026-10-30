@@ -24,6 +24,7 @@
 #define PARAM_CONTINUOUS_BROADCAST "continuous_broadcast"
 #define PARAM_OUTPUTS_LIST "outputs_list"
 #define PARAM_CONFIG_VERSION "config_version"
+#define PARAM_OUTPUT_HOTKEYS "output_hotkeys"
 #define CURRENT_CONFIG_VERSION 2
 
 win_spout_config *win_spout_config::_instance = nullptr;
@@ -43,6 +44,7 @@ win_spout_config::win_spout_config()
 		config_set_default_string(obs_config, SECTION_NAME, PARAM_CANVAS_UUID, "");
 		config_set_default_string(obs_config, SECTION_NAME, PARAM_CANVAS_NAME, "");
 		config_set_default_bool(obs_config, SECTION_NAME, PARAM_CONTINUOUS_BROADCAST, continuous_broadcast);
+		config_set_default_string(obs_config, SECTION_NAME, PARAM_OUTPUT_HOTKEYS, "");
 		config_set_default_string(obs_config, SECTION_NAME, PARAM_OUTPUTS_LIST, "");
 		config_set_default_int(obs_config, SECTION_NAME, PARAM_CONFIG_VERSION, 0);
 	}
@@ -69,6 +71,8 @@ void win_spout_config::load()
 		canvas_uuid = config_get_string(obs_config, SECTION_NAME, PARAM_CANVAS_UUID);
 		canvas_name = config_get_string(obs_config, SECTION_NAME, PARAM_CANVAS_NAME);
 		continuous_broadcast = config_get_bool(obs_config, SECTION_NAME, PARAM_CONTINUOUS_BROADCAST);
+		const char *hotkeys = config_get_string(obs_config, SECTION_NAME, PARAM_OUTPUT_HOTKEYS);
+		output_hotkeys = hotkeys ? hotkeys : "";
 		config_version = (int)config_get_int(obs_config, SECTION_NAME, PARAM_CONFIG_VERSION);
 
 		const char *json_str = config_get_string(obs_config, SECTION_NAME, PARAM_OUTPUTS_LIST);
@@ -134,6 +138,7 @@ void win_spout_config::save()
 		config_set_string(obs_config, SECTION_NAME, PARAM_CANVAS_UUID, canvas_uuid.toUtf8().constData());
 		config_set_string(obs_config, SECTION_NAME, PARAM_CANVAS_NAME, canvas_name.toUtf8().constData());
 		config_set_bool(obs_config, SECTION_NAME, PARAM_CONTINUOUS_BROADCAST, continuous_broadcast);
+		config_set_string(obs_config, SECTION_NAME, PARAM_OUTPUT_HOTKEYS, output_hotkeys.toUtf8().constData());
 		config_set_int(obs_config, SECTION_NAME, PARAM_CONFIG_VERSION, config_version);
 
 		QJsonArray arr;

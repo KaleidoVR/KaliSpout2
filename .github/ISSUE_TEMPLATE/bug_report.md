@@ -26,8 +26,8 @@ _Please attach OBS logs: Help → Log Files → Upload Current Log File_
 If applicable, add screenshots to help explain your problem.
 
 **About the Software:**
- - OBS Version [e.g. 32.2.2]
- - KaliSpout2 Version [e.g. 1.14.0]
+ - OBS Version [e.g. 33.0.0]
+ - KaliSpout2 Version [e.g. 1.14.1]
 
 
 **About Your Machine :**

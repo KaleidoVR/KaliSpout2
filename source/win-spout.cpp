@@ -9,7 +9,9 @@
 
 #include <obs-module.h>
 #include <obs-frontend-api.h>
+#include <util/platform.h>
 #include <QAction>
+#include <QCoreApplication>
 #include <QByteArray>
 #include <QMainWindow>
 #include <QMenu>
@@ -52,6 +54,12 @@ static std::map<std::string, SpoutActiveOutput> active_outputs;
 static bool obs_finished_loading = false;
 static int autostart_retry_count = 0;
 static QAction *spout_menu_action = nullptr;
+static bool restart_output_after_profile_change = false;
+static int profile_restart_tries = 0;
+static obs_hotkey_pair_id output_hotkeys = OBS_INVALID_HOTKEY_PAIR_ID;
+
+static void output_activity_changed(void *data, calldata_t *);
+static void save_output_hotkeys();
 
 static const char *MAIN_CANVAS_KEY = "__obs_main_canvas__";
 static const char *KALEIDOVR_MENU_TITLE = "KaleidoVR";
@@ -238,6 +246,10 @@ bool spout_output_start(const char *canvasUuid, const char *canvasName, const ch
 		entry.uuid = canvasUuid ? canvasUuid : "";
 		entry.name = canvasName ? canvasName : "";
 		active_outputs[key] = entry;
+
+		signal_handler_t *handler = obs_output_get_signal_handler(output);
+		signal_handler_connect(handler, "activate", output_activity_changed, (void *)1);
+		signal_handler_connect(handler, "deactivate", output_activity_changed, nullptr);
 	}
 
 	obs_data_t *settings = obs_output_get_settings(output);
@@ -340,6 +352,126 @@ void spout_output_start(const char *SpoutName)
 void spout_output_stop()
 {
 	spout_output_stop(nullptr, nullptr);
+}
+
+static void output_activity_changed(void *data, calldata_t *)
+{
+	const bool running = data != nullptr;
+	QMetaObject::invokeMethod(
+		QCoreApplication::instance(),
+		[running] {
+			if (spout_output_settings) {
+				spout_output_settings->set_started_button_state(!running);
+			}
+		},
+		Qt::QueuedConnection);
+}
+
+static bool output_hotkey_start(void *, obs_hotkey_pair_id, obs_hotkey_t *, bool pressed)
+{
+	if (!pressed || spout_output_is_any_active()) {
+		return false;
+	}
+	QMetaObject::invokeMethod(
+		QCoreApplication::instance(),
+		[] {
+			win_spout_config *config = win_spout_config::get();
+			const QByteArray uuid = config->canvas_uuid.toUtf8();
+			const QByteArray name = config->canvas_name.toUtf8();
+			const QByteArray sender = config->spout_output_name.toUtf8();
+			spout_output_start(uuid.constData(), name.constData(), sender.constData());
+		},
+		Qt::QueuedConnection);
+	return true;
+}
+
+static bool output_hotkey_stop(void *, obs_hotkey_pair_id, obs_hotkey_t *, bool pressed)
+{
+	if (!pressed || !spout_output_is_any_active()) {
+		return false;
+	}
+	QMetaObject::invokeMethod(
+		QCoreApplication::instance(), [] { spout_output_stop_all(); }, Qt::QueuedConnection);
+	return true;
+}
+
+static void load_output_hotkeys()
+{
+	const QByteArray json = win_spout_config::get()->output_hotkeys.toUtf8();
+	if (json.isEmpty()) {
+		return;
+	}
+	obs_data_t *data = obs_data_create_from_json(json.constData());
+	if (!data) {
+		return;
+	}
+	obs_data_array_t *start = obs_data_get_array(data, "start");
+	obs_data_array_t *stop = obs_data_get_array(data, "stop");
+	obs_hotkey_pair_load(output_hotkeys, start, stop);
+	obs_data_array_release(start);
+	obs_data_array_release(stop);
+	obs_data_release(data);
+}
+
+static void save_output_hotkeys()
+{
+	if (output_hotkeys == OBS_INVALID_HOTKEY_PAIR_ID) {
+		return;
+	}
+	obs_data_array_t *start = nullptr;
+	obs_data_array_t *stop = nullptr;
+	obs_hotkey_pair_save(output_hotkeys, &start, &stop);
+	obs_data_t *data = obs_data_create();
+	obs_data_set_array(data, "start", start);
+	obs_data_set_array(data, "stop", stop);
+
+	win_spout_config *config = win_spout_config::get();
+	config->output_hotkeys = obs_data_get_json(data);
+	config->save();
+
+	obs_data_release(data);
+	obs_data_array_release(start);
+	obs_data_array_release(stop);
+}
+
+static void spout_save_event(obs_data_t *, bool saving, void *)
+{
+	if (saving) {
+		save_output_hotkeys();
+	}
+}
+
+static void spout_restart_after_profile()
+{
+	QMainWindow *main_window = (QMainWindow *)obs_frontend_get_main_window();
+	if (!main_window) {
+		return;
+	}
+
+	QMetaObject::invokeMethod(
+		main_window,
+		[]() {
+			win_spout_config *config = win_spout_config::get();
+			bool pending = false;
+			if (!config->spout_output_name.isEmpty()) {
+				const QByteArray uuid = config->canvas_uuid.toUtf8();
+				const QByteArray name = config->canvas_name.toUtf8();
+				const QByteArray sender = config->spout_output_name.toUtf8();
+				if (!spout_output_is_active(uuid.constData(), name.constData())) {
+					if (!spout_output_start(uuid.constData(), name.constData(), sender.constData())) {
+						pending = true;
+					}
+				}
+			}
+			if (pending && profile_restart_tries < AUTOSTART_MAX_RETRIES) {
+				profile_restart_tries++;
+				QMainWindow *window = (QMainWindow *)obs_frontend_get_main_window();
+				if (window) {
+					QTimer::singleShot(AUTOSTART_RETRY_MS, window, []() { spout_restart_after_profile(); });
+				}
+			}
+		},
+		Qt::QueuedConnection);
 }
 
 void spout_schedule_autostart()
@@ -571,15 +703,58 @@ static void spout_obs_event(enum obs_frontend_event event, void *)
 		if (spout_output_settings) {
 			spout_output_settings->refresh_canvases();
 		}
+	} else if (event == OBS_FRONTEND_EVENT_PROFILE_CHANGING) {
+		// A running raw output blocks obs_reset_video(), which left the canvas at the
+		// previous profile's size until OBS was restarted.
+		restart_output_after_profile_change = spout_output_is_any_active();
+		if (restart_output_after_profile_change) {
+			blog(LOG_INFO, "stopping Spout output for profile change");
+			spout_output_stop_all();
+			for (int i = 0; i < 100 && obs_video_active(); i++) {
+				os_sleep_ms(10);
+			}
+		}
+	} else if (event == OBS_FRONTEND_EVENT_PROFILE_CHANGED) {
+		if (restart_output_after_profile_change) {
+			restart_output_after_profile_change = false;
+			profile_restart_tries = 0;
+			blog(LOG_INFO, "restarting Spout output after profile change");
+			spout_restart_after_profile();
+		}
 	} else if (event == OBS_FRONTEND_EVENT_EXIT) {
+		save_output_hotkeys();
+		if (output_hotkeys != OBS_INVALID_HOTKEY_PAIR_ID) {
+			obs_hotkey_pair_unregister(output_hotkeys);
+			output_hotkeys = OBS_INVALID_HOTKEY_PAIR_ID;
+		}
 		spout_output_stop_all();
 	}
 }
 
 bool obs_module_load(void)
 {
-	spout_source_info = create_spout_source_info();
-	obs_register_source(&spout_source_info);
+	blog(LOG_INFO, "KaliSpout2 %s (built against libobs %d.%d.%d) loading on OBS %s", PLUGIN_VERSION,
+	     LIBOBS_API_MAJOR_VER, LIBOBS_API_MINOR_VER, LIBOBS_API_PATCH_VER, obs_get_version_string());
+
+	// The source and filter share textures with OBS's D3D11 device. The output sends
+	// from its own D3D11 device and still works when OBS is on the OpenGL renderer.
+	obs_enter_graphics();
+	const bool d3d11 = gs_get_device_type() == GS_DEVICE_DIRECT3D_11;
+	obs_leave_graphics();
+	if (!d3d11) {
+		blog(LOG_WARNING, "OBS is running with the OpenGL renderer: Spout2 Capture and the Spout Filter need "
+				  "Direct3D 11 and are not available. The Spout output still works");
+	}
+
+	if (d3d11) {
+		spout_source_info = create_spout_source_info();
+		if (obs_source_get_display_name(spout_source_info.id)) {
+			blog(LOG_ERROR,
+			     "another plugin already registered the source id '%s'; Spout2 Capture will be missing until that plugin is removed",
+			     spout_source_info.id);
+		}
+		obs_register_source(&spout_source_info);
+	}
 
 	win_spout_config *config = win_spout_config::get();
 	config->load();
@@ -587,15 +762,22 @@ bool obs_module_load(void)
 	spout_output_info = create_spout_output_info();
 	obs_register_output(&spout_output_info);
 
+	output_hotkeys = obs_hotkey_pair_register_frontend(
+		"SpoutOutput.Start", obs_module_text("hotkeystartoutput"), "SpoutOutput.Stop",
+		obs_module_text("hotkeystopoutput"), output_hotkey_start, output_hotkey_stop, nullptr, nullptr);
+	load_output_hotkeys();
+	obs_frontend_add_save_callback(spout_save_event, nullptr);
+
 	// Menu is attached after FINISHED_LOADING so Kaleido Launcher can create the
 	// shared KaleidoVR menu first (see spout_schedule_kaleidovr_menu_action).
 	obs_frontend_add_event_callback(spout_obs_event, nullptr);
 
-	spout_filter_info = create_spout_filter_info();
-	obs_register_source(&spout_filter_info);
+	if (d3d11) {
+		spout_filter_info = create_spout_filter_info();
+		obs_register_source(&spout_filter_info);
+	}
 
 	blog(LOG_INFO, "KaliSpout2 loaded (OBS canvas-aware Spout output, KaleidoVR menu)!");
-	blog(LOG_INFO, "KaliSpout2 loaded (Version %s)", PLUGIN_VERSION);
 	blog(LOG_INFO, "KaliSpout2 loaded (%s)", PLUGIN_REPO_URL);
 
 	return true;
@@ -603,6 +785,12 @@ bool obs_module_load(void)
 
 void obs_module_unload()
 {
+	save_output_hotkeys();
+	obs_frontend_remove_save_callback(spout_save_event, nullptr);
+	if (output_hotkeys != OBS_INVALID_HOTKEY_PAIR_ID) {
+		obs_hotkey_pair_unregister(output_hotkeys);
+		output_hotkeys = OBS_INVALID_HOTKEY_PAIR_ID;
+	}
 	spout_output_stop_all();
 	if (spout_output_settings) {
 		delete spout_output_settings;

@@ -32,6 +32,8 @@ public:
 	// source is being rendered). Default off. Atomic because the render thread reads
 	// it every frame while the settings dialog writes it from the UI thread.
 	std::atomic<bool> continuous_broadcast;
+	// Start/Stop hotkey bindings, saved because OBS does not persist frontend hotkeys.
+	QString output_hotkeys;
 
 	// Bumped when persisted settings semantics change. Used to clear stale AutoStart
 	// flags that survive OBS reinstalls while the Spout plugin/config remain (#92).
